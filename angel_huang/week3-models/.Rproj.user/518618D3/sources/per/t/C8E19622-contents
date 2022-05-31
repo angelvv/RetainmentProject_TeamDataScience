@@ -1,0 +1,174 @@
+---
+title: "Structural EDA"
+author: "Perry Haaland"
+date: "10/26/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+In this file I am going to mostly pursue structural EDA, that is, looking at the structure of the dataset. Wherever it makes sense, I'll include some traditional EDA.
+
+The population is based on UGRD degree-seeking students who were enrolled at census of the Spring 2019 term. The fields named STRM and STRM_DESC describe the term from which the population was pulled. Then for those same students I check their enrollment status in the Fall 2019 term (at census) in order to derive the retention variable. 
+
+## Read the data file
+
+This is the data file provided by Chris.
+
+```{r}
+raw_df <- read.csv(file = "../../data/TEST_FILE_WEEK2_V2.csv")
+dim(raw_df)
+```
+
+```{r}
+colnames(raw_df)
+```
+## Check for missing values
+
+First we check to see which, if any, variables have missing values. We see there are two instances.
+
+```{r}
+n.miss <- function(x) sum(is.na(x))
+raw_df %>%
+  select(-UNIQUE_ID) %>%
+  map_dbl(n.miss) 
+```
+The client has instructed that for 'TRNSFR_UNITS_ENTRY' and 'TEST_CREDIT_ENTRY', missing values, should be replaced by zeros. We adjust the data set accordingly and use the modified data set for the rest of this file.
+
+```{r}
+mod_df <- raw_df %>%
+  mutate(TEST_CREDIT_ENTRY = ifelse(is.na(TEST_CREDIT_ENTRY),
+                                    0,
+                                    TEST_CREDIT_ENTRY),
+            TRNSFR_UNITS_ENTRY = ifelse(is.na(TRNSFR_UNITS_ENTRY),
+                                        0,
+                                        TRNSFR_UNITS_ENTRY))
+```
+
+## Preliminary look at response
+
+The response variable is going to be `IS_RETAINED`. The 0 value represents "Did Not Return Next Term".
+
+```{r, message = FALSE}
+mod_df %>%
+  group_by(IS_RETAINED, IS_RETAINED_DESC) %>%
+  summarize(n = n()) %>%
+  select(IS_RETAINED, n) %>%
+  pivot_wider(id_cols = IS_RETAINED, names_from = IS_RETAINED, values_from = n) %>%
+  select(NotRetained = `0`, Retained = `1`) %>%
+  mutate(Pct_Retained = round(100* Retained/(Retained + NotRetained), 1))
+```
+## Overview of all variables
+
+The following code gives us a table for each column of the data frame. We omit the first column, which has unique values per record.
+
+```{r}
+mod_df %>%
+  select(-UNIQUE_ID) %>%
+  map(table)
+```
+
+## Numerical Variables
+
+In this section, we look at the distributions and properties of the numerical variables.
+
+### CUM_RESIDENT_TERMS_BOT
+
+We notice that a few students have no cumulative terms in residence.
+
+```{r}
+mod_df %>%
+  select(CUM_RESIDENT_TERMS_BOT) %>%
+  summarize(n.missing = sum(is.na(CUM_RESIDENT_TERMS_BOT)),
+            n.zero = sum(CUM_RESIDENT_TERMS_BOT == 0, na.rm = TRUE),
+            min = min(CUM_RESIDENT_TERMS_BOT, na.rm = TRUE),
+            max = max(CUM_RESIDENT_TERMS_BOT, na.rm = TRUE),
+            mean = mean(CUM_RESIDENT_TERMS_BOT, na.rm = TRUE),
+            median = median(CUM_RESIDENT_TERMS_BOT, na.rm = TRUE))
+```
+Most students start in the fall semester and have 2, 4, or 6 previous semesters. Although seniors who graduated were excluded from the data, it is interesting to note that a few students have many previous semesters of attendance. It seems that First Year students would typically have zero cumulative terms in residence so we need to get feedback from the client on what this variable means.
+
+```{r}
+mod_df %>%
+  ggplot(aes(x=CUM_RESIDENT_TERMS_BOT)) + 
+    geom_histogram(bins = 100) +
+    scale_x_continuous(breaks = seq(0,15, by = 1))
+```
+
+Next we look at the relationship of this variable to the response. There does not seem to be much difference between students who returned and those who didn't in terms of their previous terms in residence.
+
+```{r}
+mod_df %>%
+  ggplot(aes(x = IS_RETAINED_DESC, y = CUM_RESIDENT_TERMS_BOT)) +
+  geom_boxplot()
+```
+
+### TEST_CREDIT_ENTRY
+
+Students may be awarded academic credit for some courses based on passing tests. Many, but not all, students have credits upon entering. As the client instructed that for this case, missing values, were replaced by zeros. (See above.)
+
+
+```{r}
+mod_df %>%
+  select(TEST_CREDIT_ENTRY) %>%
+  summarize(n.missing = sum(is.na(TEST_CREDIT_ENTRY)),
+            n.zero = sum(TEST_CREDIT_ENTRY == 0),
+            min = min(TEST_CREDIT_ENTRY, na.rm = TRUE),
+            max = max(TEST_CREDIT_ENTRY, na.rm = TRUE),
+            mean = mean(TEST_CREDIT_ENTRY, na.rm = TRUE),
+            median = median(TEST_CREDIT_ENTRY, na.rm = TRUE))
+```
+We see that many students to not have transfer credits. 
+
+```{r}
+mod_df %>%
+  ggplot(aes(x=TEST_CREDIT_ENTRY)) + 
+    geom_histogram(bins = 100) 
+```
+
+Next we look at the relationship of this variable with the response. We see that students who did not return typically had fewer test credits (mostly, none).
+
+```{r}
+mod_df %>%
+  ggplot(aes(x = IS_RETAINED_DESC, y = TEST_CREDIT_ENTRY)) +
+  geom_boxplot()
+```
+
+## Categorical Variables
+
+In this section, we look at the distributions and properties of the numerical variables.
+
+### CLASS_LEVEL_STUDENT
+
+This variable is the year in college for the student in the Spring semester. First we calculate the proportion retained and rough confidence intervals.
+
+```{r, message = FALSE}
+mod_df %>%
+  group_by(CLASS_LEVEL_STUDENT) %>%
+  summarize(n = n(),
+            n_retained = sum(IS_RETAINED),
+            p_retained = n_retained/n,
+            stderror_p = sqrt(p_retained*(1-p_retained)/n),
+            p_lower = p_retained - 2*stderror_p,
+            p_upper = p_retained + 2*stderror_p)
+```
+
+In the figure below, we show the proportion of students who returned by class year. The error bars are +/- two standard errors. It looks likes students who were seniors in the Spring but did not graduate, were the least likely to return.
+
+```{r,, message = FALSE}
+mod_df %>%
+  group_by(CLASS_LEVEL_STUDENT) %>%
+  summarize(n = n(),
+            n_retained = sum(IS_RETAINED),
+            p_retained = n_retained/n,
+            stderror_p = sqrt(p_retained*(1-p_retained)/n),
+            p_lower = p_retained - 2*stderror_p,
+            p_upper = p_retained + 2*stderror_p) %>%
+  ggplot(aes(x = CLASS_LEVEL_STUDENT, y = p_retained)) +
+    geom_point() + 
+    geom_errorbar(aes(ymin = p_lower, ymax = p_upper), width = .2)
+```
+

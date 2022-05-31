@@ -1,0 +1,6 @@
+"0","# Takes too long, only run if necessary "
+"0","# library(randomForestExplainer)"
+"0","# #setwd(my/destination/path)"
+"0","# explain_forest(ml_rf, interactions = TRUE, data = train)"
+"0","# # This will generate an .html file, named Your_forest_explained.html, in your my/destination/path that you can easily open in a Web Browser."
+"0","# # In this report you'll find useful information about the structure of trees and forest and several useful statistics about the variables."

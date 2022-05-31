@@ -1,0 +1,4 @@
+"0","fit4 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDITS_FAILED +"
+"0","              CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED, "
+"0","            data = mod2_df,"
+"0","            family = ""binomial"")"

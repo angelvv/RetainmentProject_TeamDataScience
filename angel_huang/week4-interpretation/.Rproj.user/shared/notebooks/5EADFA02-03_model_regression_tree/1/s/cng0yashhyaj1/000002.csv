@@ -1,0 +1,26 @@
+"0","library(kernlab)"
+"2","
+Attaching package: ‘kernlab’
+
+"
+"2","The following object is masked from ‘package:purrr’:
+
+    cross
+
+"
+"2","The following object is masked from ‘package:ggplot2’:
+
+    alpha
+
+"
+"0","ml_svm = ksvm(ml_formula2,data=train)"
+"0","#Summarize the model"
+"0","summary(ml_svm)"
+"1","Length "
+"1"," Class "
+"1","  Mode "
+"1","
+"
+"1","     1 "
+"1","  ksvm "
+"1","    S4 "

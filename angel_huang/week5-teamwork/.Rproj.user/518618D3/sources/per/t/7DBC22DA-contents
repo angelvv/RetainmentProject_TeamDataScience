@@ -1,0 +1,219 @@
+---
+title: "05_Program_DoubleMajor"
+author: "Angel Huang"
+date: "11/29/2020"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1 Prepare data
+## Load libraries
+```{r}
+# Install EDA related libraries
+library(tidyverse)
+library(emmeans)
+library(ggplot2)
+library(gridExtra)
+#library(plyr)
+library(dplyr) # for group by
+#library(tidyr)
+```
+
+## Load data from revised_df.Rdata
+```{r}
+load("revised_df.RData")
+dim(revised_df)
+```
+
+We recall the variable names.
+
+```{r}
+names(revised_df)
+df = revised_df
+```
+
+
+## Variable engineering: From previous 03_tree models, we discovered that credits failed and attempted are the first two main split, based on those split, we will convert failed credits into categories.
+
+### Classification and Regression Tree (CART)
+```{r train}
+library(rpart)
+library(rpart.plot)
+#Build the model
+# For classification tree, response needs to be factor
+# tree doesn't need log transform
+ml_formula = formula(Retained ~ Class +
+                                Residency +
+                                DoubleMajor + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed +
+                                Program)
+# This gives the same result
+#ml_formula = formula(Retained ~ Credits +
+#                                CreditsFailed)
+
+ml_tree = rpart(ml_formula,data=df,cp=0.008) # cp for complexity, smaller cp =more branches
+
+#Summarize the model
+#summary(ml_tree)
+# Visualize the decision tree with rpart.plot
+rpart.plot(ml_tree, box.palette="RdBu", shadow.col="gray", nn=TRUE)
+```
+We see the split for Credits are <2.5, <7.3; splits for CreditsFailed are >=4.8, >=13.
+The highest retention group are students who earn >=7.3 credits and fail <4.8 credits (retention rate = 0.98, 92% of students are in this group). The lowest retention group are students who earn <2.5 credits and fail <11 (retention rate = 0.28).
+
+First, we do a density plot to visually verify the split
+```{r}
+cdplot(factor(Retained) ~ CreditsFailed, 
+       df,
+       #col=c("lightgoldenrod", "lightcyan"), 
+       ylab = "Retention", xlab ="Credits FAILED", main = "Conditional density plot")
+```
+More failed credits, more dropout. The split happens at >=4.8, >=13, consistent with the tree split.
+
+Then density plot on credits attempted.
+```{r}
+cdplot(factor(Retained) ~ Credits, 
+       df,
+       #col=c("lightgoldenrod", "lightcyan"), 
+       ylab = "Retention", xlab ="Credits EARNED", main = "Conditional density plot")
+```
+The split happens at <4, <7.3, mostly consistent with the tree split.
+
+## Create new variables
+```{r}
+# convert variables to factor
+df$Failed = cut(
+  df$CreditsFailed,
+  breaks = c(-Inf, 4.8, 13, Inf), # If use 0 for the first one will make all entries with 0 into NA
+  labels = c("low_<=4", "med_4<=12", "high_12<Inf"),
+  right  = TRUE # include right hand number
+)
+df$Earned = cut(
+  df$Credits,
+  breaks = c(-Inf, 2.5, 7.3, Inf),
+  labels = c("low_<=2", "med_2<=7", "high_7<Inf"),
+  right  = TRUE # include right hand number
+)
+```
+
+# 3. GLM model
+## Use a full model to predict retention rate
+```{r}
+df$DoubleMajorF = factor(df$DoubleMajor) # convert to factor
+glm1 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed +
+                                Program)^2, 
+            data = df,
+            family = binomial(link = "logit"))
+summary(glm1)
+df$pred = predict(glm1,df[,c("Class","Residency", "DoubleMajorF", "Enrollment","Credits","CreditsFailed","Program")],type="response")
+
+# Use Credits and creditsFailed for a better prediction
+```
+Some interesting significant interactions are: Credits:ProgramBAMJ, DoubleMajor:Credits, DoubleMajor:CreditsFailed.
+  
+# 4. Plot for variables of interest (Earned, Failed, Program, DoubleMajor)
+Using a decision tree model, we have identified critical splits of variable "FailedCredits" and "Credits", based on this, we divided FailedCredits into 3 intervals (i.e. Failed): low=0-5, med=5.5-13, high=13.5-Inf, and Credits into 3 intervals (i.e. Earned): low=0-2, med=2.5-7, high=7-Inf, for easier interpretation. 
+
+Here we use box plots to visualize interaction effects between the 4 variables of interest: Earned, Failed, Program, DoubleMajor on (full-GLM-model estimated) probability of return.
+
+## 4.1 Retention rate by Earned and Failed
+# Violin plot -- CDF too narrow (dispersed), can't see shape
+```{r}
+#ggplot(df, aes(x=Earned, y=pred,  fill=Failed)) +
+#  geom_violin() +
+  #geom_boxplot(width=0.1) + theme_minimal()
+```
+
+```{r}
+ggplot(data=df, aes(x=Earned, y=pred, fill=Failed)) +
+  geom_boxplot() + 
+  ylab("GLM estimated probability of return") +
+  xlab("Earned credits") + 
+  labs(fill = "Failed credits")
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+```
+Interaction effect of Earned and Failed on retention rate:
+When earn less than 2 credits, retention rate is low. Within this group, if failed credit is <=4, the median return rate is the lowest, around 25%, probably because so few credits were attempted in total. Interestingly, when failed 4-12 credits, the return rate is relatively high, then when more credits are failed, the return rate is lower again around 50%. When earn 2-7 credits, the return rate is similar regardless of failed credits. When earn more than 7 credits, there is no student fail more than 12 credits. The lower failed credit results in highest return rate ~98%.
+
+
+## 4.2 Retention rate by Earned and Program
+```{r}
+ggplot(data=df, aes(x=Program, y=pred, fill=Earned)) +
+  geom_boxplot() + 
+  ylab("GLM estimated probability of return") +
+  xlab("Program") + 
+  labs(fill = "Earned credits")
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Program and Earned on retention rate:
+For BA (5749 students), rate is >75%, lowest for students earned 2-7 credits.
+For BACH (College of Arts and Sciences, 848 students), 
+For BAED (School of education), retention rate is high, even for students earned <=2 credits, the retention rate is ~85%.
+For BAMJ (School of Media and Journalism, 676 students), retention rate is high in general, but lower (~75%) for students earned 2-7 credits.
+For BFA (Studio Arts, 23 students), low earned credits reduce retention rate to 50%.
+For BMUS (Music Performance, 36 students), sample size is small, but retention rate is almost 100%.
+For BS (4524 students), higher earned credits increases retention rate.
+For BSBA (Business admin, 1270 students), all retention rate is around 95%.
+For BSIS (Information Science, 84 students), sample size is small, but retention rate is almost 100%.
+For BSN (Nursing, 424 students), they have the lowest retention rate among programs, especially when earned credit is low, rate <25%, or medium, rate <50%. However, when earned high credits, return rate is very high >95%.
+For BSPH (Public Health, 312 students), for low and median earned credits, rate ~50%, for high credits, ~100%.
+For BSPHS (Pharmaceutical Sciences, 74 students), small sample size. When earned credits<=2, rate~50%, otherwise rate ~100%.
+
+## 4.3 Retention rate by Failed and Program
+```{r}
+ggplot(data=df, aes(x=Program, y=pred, fill=Failed)) +
+  geom_boxplot() + 
+  ylab("GLM estimated probability of return") +
+  xlab("Program") + 
+  theme(axis.text=element_text(size=6)) +
+  labs(fill = "Failed credits")
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Program and Earned on retention rate:
+For all programs, if failed credits <=4, return rate is ~100%.
+When failed 4-12 credits, BFA and BSPH has the lowest return rate, ~50%.
+When failed >12 credits, BSN and BSPH has the lowest return rate, ~13% and ~38% respectively. Should be the focus of intervention.
+
+## 4.4 Retention rate by Earned and DoubleMajor
+```{r}
+ggplot(data=df, aes(x=DoubleMajorF, y=pred, fill=Earned)) +
+  geom_boxplot() + 
+  ylab("GLM estimated probability of return") +
+  xlab("Double major") + 
+  theme(axis.text=element_text(size=6)) +
+  labs(fill = "Earned credits")
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Double major and Earned on retention rate:
+Single major students have lower return rate than double major, regardless of how many credits earned. Students earn medium credits have the lowest return rate.  
+
+
+## 4.5 Retention rate by Failed and DoubleMajor
+```{r}
+ggplot(data=df, aes(x=DoubleMajorF, y=pred, fill=Failed)) +
+  geom_boxplot() + 
+  ylab("GLM estimated probability of return") +
+  xlab("Double major") + 
+  theme(axis.text=element_text(size=6)) +
+  labs(fill = "Failed credits")
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Double major and Failed on retention rate:
+Single major students have lower return rate than double major, regardless of how many credits earned. When failed more credits, single major students are more sensitive and more likely to dropout.  

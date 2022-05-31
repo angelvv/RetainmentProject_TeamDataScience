@@ -1,0 +1,13 @@
+"0","rlang::last_error()"
+"1","[1m<error/rlang_error>[22m
+`n()` must only be used inside dplyr verbs.
+[1mBacktrace:[22m
+[90m  1. [39mdplyr::group_by(., IS_RETAINED_DESC)
+[90m  8. [39mplyr::summarize(., n = n())
+[90m  9. [39m[ base::eval(...) ][90m with 1 more call[39m
+[90m 11. [39mdplyr::n()
+[90m 12. [39mdplyr:::peek_mask(""n()"")
+[90m 13. [39mdplyr:::context_peek(""mask"", fun)
+[90m 14. [39mcontext_peek_bare(name) %||% abort(glue(""`{fun}` must only be used inside {location}.""))
+[90mRun `rlang::last_trace()` to see the full context.[39m
+"

@@ -1,0 +1,9 @@
+"0","install_github(""easyGgplot2"", ""kassambara"")
+"
+"2","WARNING: Rtools is required to build R packages, but no version of Rtools compatible with R 3.6.1 was found. (Only the following incompatible version(s) of Rtools were found:4.0)
+
+Please download and install Rtools 3.5 from https://cran.r-project.org/bin/windows/Rtools/.
+"
+"2","Error in parse_repo_spec(repo) : 
+  Invalid git repo specification: 'easyGgplot2'
+"

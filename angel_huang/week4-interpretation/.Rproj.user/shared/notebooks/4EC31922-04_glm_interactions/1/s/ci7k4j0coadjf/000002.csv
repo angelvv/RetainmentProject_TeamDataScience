@@ -1,0 +1,19 @@
+"0","fit5_emtrends <- emtrends(fit5, 
+         var = ""CREDIT_HOURS_EARNED"",
+         transform = ""response"")
+fit5_emtrends
+"
+"1","'emmGrid' object with variables:
+"
+"1","    CLASS_LEVEL_STUDENT = "
+"1","FR, SO, JR, SR"
+"1","
+"
+"1","    RESIDENCY = "
+"1","In-State, Out-of-State"
+"1","
+"
+"1","    CREDIT_HOURS_EARNED = "
+"1","13.251"
+"1","
+"

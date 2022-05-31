@@ -1,0 +1,10 @@
+"0","#Summarize the model
+summary(ml_gbm)
+"
+"2","Warning in gzfile(file, ""wb"") :"
+"2","
+ "
+"2"," cannot open compressed file 'C:/Dropbox (Frohlich Lab)/Frohlich Lab Team Folder/Codebase/CodeAngel/STOR765_Fall2020_TeamDataScience/angel_huang/week3-models/.Rproj.user/shared/notebooks/C084D80B-03_model_regression_tree/1/518618D31CFE7BFD/cyd6svioddjy7_t/4a9dfe3d7e3e4298a15d27f9072bf2c7.snapshot', probable reason 'No such file or directory'
+"
+"2","Error in gzfile(file, ""wb"") : cannot open the connection
+"

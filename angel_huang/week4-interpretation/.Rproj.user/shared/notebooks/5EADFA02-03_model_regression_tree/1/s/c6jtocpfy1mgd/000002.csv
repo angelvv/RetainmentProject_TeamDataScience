@@ -1,0 +1,9 @@
+"0","library(gbm)"
+"2","package ‘gbm’ was built under R version 3.6.3"
+"2","Loaded gbm 2.1.8
+"
+"0","#Build the model"
+"0","ml_gbm = gbm(ml_formula3,data=train,distribution=""multinomial"") # binomial is not supported (why?)"
+"2","Setting `distribution = ""multinomial""` is ill-advised as it is currently broken. It exists only for backwards compatibility. Use at your own risk."
+"0","#Summarize the model"
+"0","summary(ml_gbm)"

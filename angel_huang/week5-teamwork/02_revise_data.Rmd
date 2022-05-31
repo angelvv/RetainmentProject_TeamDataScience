@@ -1,0 +1,165 @@
+---
+title: "02. Revise Data"
+author: "Angel Huang, modified from Perry Haaland"
+date: "11/29/2020"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(emmeans)
+```
+
+## Introduction
+
+The purpose of the markdown document is to revise the existing data, to make it more suited for further analysis. In particular, one new variable is added (credits failed). All variables get R friendly names that will display better on graphics and generally require less typing.
+
+This code produces a data set for common use. It is stored as an R objected in the data folder under the name `revised_df.RData`.
+
+
+## Load the previously prepared data
+
+We have all working from the following common data set up to this point.
+
+```{r}
+load("../../data/students_df.RData")
+dim(students_df)
+```
+
+We recall the variable names.
+
+```{r}
+names(students_df)
+```
+### Variables for modeling
+
+We are going to assign R friendly names, first.
+
+* Retained = IS_RETAINED: 0 for did not return, 1 for returned 
+* Residency = RESIDENCY: In-state, Out-of-state
+* Class = CLASS_LEVEL_STUDENT: FR, SO, JR, and SR
+* DoubleMajor = IS_DBL_MAJOR: 0 for No, 1 for Yes
+* Enrollment = STU_ORIG_ENROLL_STATUS: New Student or Transfer Student 
+* Credits = CREDIT_HOURS_EARNED
+* CreditsFailed = CREDITS_FAILED: CREDIT_HOURS_ATT - CREDIT_HOURS_EARNED
+* MajorDivision = MAJ_1_DIV_CODE, abbreviation for division of declared major
+* Program = MAJ_1_PROGRAM_DEGREE
+
+As before, we start by making the class level an ordered factor based on student's year in school.
+
+```{r}
+class_levels <- sort(unique(students_df$CLASS_LEVEL_STUDENT))[c(1,3,2,4)]
+mod_df <- students_df
+mod_df$CLASS_LEVEL_STUDENT <-
+  factor(students_df$CLASS_LEVEL_STUDENT, 
+             levels = class_levels)
+```
+
+We also add CREDITS_FAILED to the data. I like this variable a bit better than the credits earned because it seems to have a more easily grasped interpretation.
+
+
+```{r}
+mod_df <- mod_df %>%
+  mutate(CREDITS_FAILED = CREDIT_HOURS_ATT - CREDIT_HOURS_EARNED)
+```
+
+We also delete one very small group of students who don't easily fit in with the original enrollment status.
+
+```{r}
+mod_df <- mod_df %>%
+  filter(STU_ORIG_ENROLL_STATUS != "Unclassified") %>%
+  mutate(STU_ORIG_ENROLL_STATUS = 
+           ifelse(STU_ORIG_ENROLL_STATUS == "New Student",
+                  "New Student",
+                  "Transfer Student"))
+```
+
+
+
+Finally, for the purposes of this analysis and the ability to display the results, I rename many of the variables with R friendly and graphics suitable names.
+
+
+```{r}
+revised_df <- mod_df %>%
+  select(Retained = IS_RETAINED,
+         Class = CLASS_LEVEL_STUDENT,
+         Residency = RESIDENCY,
+         DoubleMajor = IS_DBL_MAJOR,
+         Enrollment = STU_ORIG_ENROLL_STATUS,
+         Credits = CREDIT_HOURS_EARNED,
+         CreditsFailed = CREDITS_FAILED,
+         MajorDiv = MAJ_1_DIV_CODE,
+         Program = MAJ_1_PROGRAM_DEGREE)
+```
+
+There are 14,171 students in our final data set.
+
+```{r}
+nrow(revised_df)
+```
+
+## Checking on the variables
+
+```{r}
+revised_df %>%
+  group_by(Class) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+
+```{r}
+revised_df %>%
+  group_by(Residency) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+```{r}
+revised_df %>%
+  group_by(DoubleMajor) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+
+```{r}
+revised_df %>%
+  group_by(Enrollment) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+
+
+```{r}
+revised_df %>%
+  group_by(MajorDiv) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+```{r}
+revised_df %>%
+  group_by(Program) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+```{r}
+revised_df %>%
+  group_by(Credits) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+
+```{r}
+revised_df %>%
+  group_by(CreditsFailed) %>%
+  summarize(n = n(), .groups = "drop")
+```
+
+## Saving the data 
+
+The revised file is saved in the data folder as `revised_df.RData`.
+
+```{r}
+save(revised_df, file = "revised_df.RData")
+```
+

@@ -1,0 +1,12 @@
+"0","#Predict using the model"
+"0","test$prob_gbm = predict(ml_gbm,x,n.trees=1) "
+"0","optCutOff = optimalCutoff(test$IS_RETAINED, test$prob_gbm)[1]"
+"0","optCutOff # -0.18 something is wrong..."
+"1","[1]"
+"1"," -0.1810564"
+"1","
+"
+"0","test$pred_gbm = as.numeric(test$prob_gbm>=optCutOff)"
+"2","Error in `$<-.data.frame`(`*tmp*`, pred_gbm, value = c(0, 0, 0, 0, 0,  : 
+  replacement has 7120 rows, data has 3560
+"

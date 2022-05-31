@@ -1,0 +1,7 @@
+"0","mod_df <- raw_df %>%"
+"0","  mutate(TEST_CREDIT_ENTRY = ifelse(is.na(TEST_CREDIT_ENTRY),"
+"0","                                    0,"
+"0","                                    TEST_CREDIT_ENTRY),"
+"0","            TRNSFR_UNITS_ENTRY = ifelse(is.na(TRNSFR_UNITS_ENTRY),"
+"0","                                        0,"
+"0","                                        TRNSFR_UNITS_ENTRY))"

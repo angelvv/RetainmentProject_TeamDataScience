@@ -1,0 +1,4 @@
+"0","class_eff_df <- emmeans(fit1, ~ CLASS_LEVEL_STUDENT,"
+"0","                        type = ""response"") %>%"
+"0","  as.data.frame"
+"0","class_eff_df"

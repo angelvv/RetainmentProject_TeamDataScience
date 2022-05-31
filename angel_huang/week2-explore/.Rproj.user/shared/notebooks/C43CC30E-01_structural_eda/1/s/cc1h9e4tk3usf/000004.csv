@@ -1,0 +1,7 @@
+"0","raw_df <- read.csv(file = ""../../data/TEST_FILE_WEEK2_V2.csv"")"
+"0","dim(raw_df)"
+"1","[1]"
+"1"," 14238"
+"1","    37"
+"1","
+"

@@ -1,0 +1,55 @@
+---
+title: "01. Make Data"
+author: "Perry Haaland"
+date: "12/04/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+The population is based on UGRD degree-seeking students who were enrolled at census of the Spring 2019 term. The fields named STRM and STRM_DESC describe the term from which the population was pulled. Then for those same students I check their enrollment status in the Fall 2019 term (at census) in order to derive the retention variable. 
+
+## Read the data file
+
+This is the data file provided by Chris.
+
+```{r}
+raw_df <- read.csv(file = "../data/TEST_FILE_WEEK2_V2.csv")
+dim(raw_df)
+```
+
+```{r}
+colnames(raw_df)
+```
+## Replace missing values
+
+The client has instructed that for 'TRNSFR_UNITS_ENTRY' and 'TEST_CREDIT_ENTRY', missing values, should be replaced by zeros. We adjust the data set accordingly and use the modified data set for the rest of this file.
+
+```{r}
+students_df <- raw_df %>%
+  mutate(TEST_CREDIT_ENTRY = ifelse(is.na(TEST_CREDIT_ENTRY),
+                                    0,
+                                    TEST_CREDIT_ENTRY),
+            TRNSFR_UNITS_ENTRY = ifelse(is.na(TRNSFR_UNITS_ENTRY),
+                                        0,
+                                        TRNSFR_UNITS_ENTRY))
+```
+
+## Save the Data
+
+For the next phase of the project, each team member is to start with the data set as modified.
+
+```{r}
+save(students_df, file = "../RData/students_df.RData")
+```
+
+## To use the data
+
+```{r}
+load("../RData/students_df.RData")
+```
+

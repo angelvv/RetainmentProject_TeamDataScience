@@ -1,0 +1,32 @@
+{
+    "id": "978F26B9",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1606683887195.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "expression": "revised_df",
+        "caption": "revised_df",
+        "totalObservations": 14171,
+        "displayedObservations": 14171,
+        "variables": 8,
+        "cacheKey": "CED1E46B",
+        "object": "revised_df",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=revised_df&cache_key=CED1E46B&max_cols=50",
+        "preview": 0
+    },
+    "folds": "",
+    "lastKnownWriteTime": 33495917372309614,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1606683887195,
+    "read_only": false,
+    "read_only_alternatives": []
+}

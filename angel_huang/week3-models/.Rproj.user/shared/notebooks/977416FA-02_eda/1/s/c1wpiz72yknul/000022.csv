@@ -1,0 +1,7 @@
+"0","p1 = qplot(df$CUM_RESIDENT_TERMS_BOT, geom=""histogram"", binwidth=1)"
+"0","p2 = qplot(df$TRNSFR_UNITS_ENTRY, geom=""histogram"")"
+"0","p3 = qplot(df$TEST_CREDIT_ENTRY, geom=""histogram"")"
+"0","p4 = qplot(df$CREDIT_HOURS_ATT, geom=""histogram"")"
+"0","p5 = qplot(df$CREDIT_HOURS_EARNED, geom=""histogram"")"
+"0","# arrange subplots (install gridExtra package)"
+"0","grid.arrange(p1, p2, p3, p4, p5, ncol = 3) "

@@ -1,0 +1,8 @@
+"0","# Partition the data"
+"0","library(caTools)"
+"2","package ‘caTools’ was built under R version 3.6.2"
+"0","set.seed(2020) "
+"0","trainMask = sample.split(df$IS_RETAINED, SplitRatio = .75)"
+"0","train = subset(df, trainMask == TRUE)"
+"0","test  = subset(df, trainMask == FALSE)"
+"0",""

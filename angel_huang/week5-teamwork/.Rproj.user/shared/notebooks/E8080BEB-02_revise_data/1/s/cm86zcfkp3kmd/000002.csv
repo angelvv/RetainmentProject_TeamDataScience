@@ -1,0 +1,6 @@
+"0","mod_df <- mod_df %>%"
+"0","  filter(STU_ORIG_ENROLL_STATUS != ""Unclassified"") %>%"
+"0","  mutate(STU_ORIG_ENROLL_STATUS = "
+"0","           ifelse(STU_ORIG_ENROLL_STATUS == ""New Student"","
+"0","                  ""New Student"","
+"0","                  ""Transfer Student""))"

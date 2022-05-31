@@ -1,0 +1,91 @@
+"0","fit1 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED, 
+            data = mod_df,
+            family = binomial(link = ""logit""))
+fit2 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED +
+               RESIDENCY, 
+            data = mod_df,
+            family = binomial(link = ""logit""))
+fit3 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED +
+              CLASS_LEVEL_STUDENT*RESIDENCY, 
+            data = mod_df,
+            family = binomial(link = ""logit""))
+fit4 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED +
+              CLASS_LEVEL_STUDENT*RESIDENCY +
+              RESIDENCY*CREDIT_HOURS_EARNED, 
+            data = mod_df,
+            family = binomial(link = ""logit""))
+fit5 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*RESIDENCY*CREDIT_HOURS_EARNED,
+            data = mod_df,
+            family = binomial(link = ""logit""))
+anova(fit1, fit2, fit3, fit4, fit5, test = ""LR"")
+"
+"1","Analysis of Deviance Table
+"
+"1","
+"
+"1","Model 1: IS_RETAINED ~ CLASS_LEVEL_STUDENT * CREDIT_HOURS_EARNED
+Model 2: IS_RETAINED ~ CLASS_LEVEL_STUDENT * CREDIT_HOURS_EARNED + RESIDENCY
+Model 3: IS_RETAINED ~ CLASS_LEVEL_STUDENT * CREDIT_HOURS_EARNED + CLASS_LEVEL_STUDENT * 
+    RESIDENCY
+Model 4: IS_RETAINED ~ CLASS_LEVEL_STUDENT * CREDIT_HOURS_EARNED + CLASS_LEVEL_STUDENT * 
+    RESIDENCY + RESIDENCY * CREDIT_HOURS_EARNED
+Model 5: IS_RETAINED ~ CLASS_LEVEL_STUDENT * RESIDENCY * CREDIT_HOURS_EARNED"
+"1","
+"
+"1"," "
+"1"," Resid. Df"
+"1"," Resid. Dev"
+"1"," Df"
+"1"," Deviance"
+"1","  Pr(>Chi)"
+"1","    "
+"1","
+1"
+"1","     14230"
+"1","     3449.7"
+"1","   "
+"1","         "
+"1","          "
+"1","    "
+"1","
+2"
+"1","     14229"
+"1","     3434.2"
+"1","  1"
+"1","  15.5058"
+"1"," 8.225e-05"
+"1"," ***"
+"1","
+3"
+"1","     14226"
+"1","     3432.1"
+"1","  3"
+"1","   2.1763"
+"1","    0.5366"
+"1","    "
+"1","
+4"
+"1","     14225"
+"1","     3431.3"
+"1","  1"
+"1","   0.7107"
+"1","    0.3992"
+"1","    "
+"1","
+5"
+"1","     14222"
+"1","     3428.8"
+"1","  3"
+"1","   2.5602"
+"1","    0.4645"
+"1","    "
+"1","
+"
+"1","---
+Signif. codes:  "
+"1",""
+"1","
+"
+"1","0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1"
+"1","
+"

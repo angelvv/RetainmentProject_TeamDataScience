@@ -1,0 +1,5 @@
+"0","# Partition the data"
+"0","library(caTools)"
+"0","set.seed(2020) "
+"0","test  = subset(df, trainMask == FALSE)"
+"0",""

@@ -1,0 +1,5 @@
+"0","# Subsample dataset to exclude senior data"
+"0","df_plot = df %>%"
+"0","  group_by(MAJ_1_SCHOOL_NAME, IS_RETAINED) %>%"
+"0","  summarise(not_retained = mean(1-IS_RETAINED))"
+"0","df_plot"

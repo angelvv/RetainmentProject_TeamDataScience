@@ -1,0 +1,142 @@
+---
+title: "01_make_data"
+author: "Ruiping Ke"
+date: "10/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Q1:How to download the csv file?
+**Structural EDA**
+As a first step, we suggest examining each of the variables and determining whether it is either numerical, or categorical.
+```{r}
+data<-read.csv('/Users/keruiping/Desktop/765 data/TEST_FILE_WEEK2_V2.csv')
+str(data)
+unique(data$STRM)
+```
+The response variable in this dataset is "IS_RETAINED", and this is a count variable.
+The difference between count variables and measurement variables:
+Count Variable: An individual piece of count data is often termed a count variable.
+Measurement variables are, as the name implies, things you can measure. An individual observation of a measurement variable is always a number. Examples include length, weight, pH, and bone density. Other names for them include "numeric" or "quantitative" variables.
+
+2.A density plot is a representation of the distribution of a numeric variable. It uses a kernel density estimate to show the probability density function of the variable.
+
+From the structure we check above, we can find that 5 variables: CUM_RESIDENT_TERMS_BOT,TRNSFR_UNITS_ENTRY,TEST_CREDIT_ENTRY ,CREDIT_HOURS_EARNED and CREDIT_HOURS_EARNED  are the measurement variable.
+(1)Examine it for outliers and distributional properties such as bimodality, skewness, heavy tails, etc.
+
+```{r}
+#check the missing values
+data1<-data[,c("CUM_RESIDENT_TERMS_BOT","TRNSFR_UNITS_ENTRY","TEST_CREDIT_ENTRY","CREDIT_HOURS_ATT","CREDIT_HOURS_EARNED")]
+summary(data1)
+sum(complete.cases(data1))         
+sum(!complete.cases(data1))
+mean(!complete.cases(data1))       #Proportion of missing values
+data1[!complete.cases(data1),]  #Filter out missing values
+
+is.na(data$TRNSFR_UNITS_ENTRY)
+sum(is.na(data$TRNSFR_UNITS_ENTRY))
+sum(is.na(data$TEST_CREDIT_ENTRY))
+```
+
+
+(2)# Histogram
+```{r}
+par(mfrow=c(2,3))
+hist(data$CUM_RESIDENT_TERMS_BOT)
+hist(data$TRNSFR_UNITS_ENTRY)
+hist(data$TEST_CREDIT_ENTRY)
+hist(data$CREDIT_HOURS_ATT)
+hist(data$CREDIT_HOURS_EARNED)
+```
+We found that there is a right-skewness in TEST_CREDIT_ENTRY, and we can consider a log transformation, which may reduce the number of influential points since exceptionally large or small values that have a proportionally big impact on the model.
+
+#Density
+I have added a “rug” to our display that makes it possible to discern the individual data points:
+```{r}
+par(mfrow=c(1,3))
+plot(density(data$CUM_RESIDENT_TERMS_BOT))
+rug(data$CUM_RESIDENT_TERMS_BOT)
+
+
+plot(density(data$CREDIT_HOURS_ATT))
+rug(data$CREDIT_HOURS_ATT)
+
+plot(density(data$CREDIT_HOURS_EARNED))
+rug(data$CREDIT_HOURS_EARNED)
+```
+there is bimodality in the variable nameed CUM_RESIDENT_TERMS_BOT,suggesting that there are subgroups in the data that
+may be of interest.
+
+3. Check for collinearity.
+```{r}
+data2<-na.omit(data1)
+library(ggplot2)
+res<-cor(data2, method="pearson")
+round(res, 2)
+library(corrplot)
+corrplot(res, type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+```
+There is a high correlation between CREDIT_HOURS_ATT and CREDIT_HOURS_EARNED, which will result that (1) The meaning of estimated parameters are unreasonable (2)The significance test of the variable loses its meaning, and important explanatory variables may be excluded from the model.
+
+3.categorical variable
+Make a  bar plot and determine how many categories/values there are and note how many observations are associated with each category.Consider how many categories/values there are for each discrete variable and think about how that
+might affect your models.
+```{r}
+barplot(sort(table(data$RESIDENCY_CODE),decreasing=TRUE),las=2)
+barplot(sort(table(data$MAJ_2_SCHOOL_NAME),decreasing=TRUE),las=2)
+barplot(sort(table(data$MAJ_2_DIV_NAME),decreasing=TRUE),las=2)
+MAJ_1_SCHOOL_NAME<-data[,c("MAJ_1_SCHOOL_NAME")]
+cttab1 <-table(MAJ_1_SCHOOL_NAME)
+cttab1
+MAJ_1_DIV_NAME<-data[,c("MAJ_1_DIV_NAME")]
+cttab2 <-table(MAJ_1_DIV_NAME)
+cttab2
+IS_RETAINED<-data[,c("IS_RETAINED")]
+cttab3 <-table(IS_RETAINED)
+cttab3
+```
+
+4. The chi-square test of independence may be valuable.
+
+```{r}
+library("MASS")
+# Create a data frame from the main data set.
+data3 <- data.frame(data$CLASS_LEVEL_STUDENT, data$MAJ_1_DIV_NAME)
+
+# Create a table with the needed variables.
+data.table = table(data$CLASS_LEVEL_STUDENT, data$MAJ_1_DIV_NAME) 
+print(data.table)
+
+# Perform the Chi-Square test.
+print(chisq.test(data.table))
+
+```
+The result shows that the p value is less than 0.05, indicating that these two catogory variable are most likely to be dependent to each other.
+
+5.Traditional EDA(For the response variable)--The  response variable is a yes/no binary variable.
+Be prepared for binomial family models.
+```{r}
+hist(data$IS_RETAINED)
+library(ggplot2)
+ggplot(data, aes(x=IS_RETAINED, color=MAJ_1_DIV_NAME)) + geom_histogram(position="dodge", binwidth=1)
+ggplot(data, aes(x=IS_RETAINED, color=CLASS_LEVEL_STUDENT)) + geom_histogram(position="dodge", binwidth=1)
+lmod <- glm(IS_RETAINED ~ RESIDENCY_CODE+CLASS_LEVEL_STUDENT, family = binomial, data)
+summary(lmod)
+lmodc <- glm(IS_RETAINED ~ RESIDENCY_CODE, family = binomial, data)
+anova(lmodc,lmod, test="Chi")
+```
+
+6.Make a scatter plot with the independent variable on the x-axis and the response variable on the y-axis.
+```{r}
+par(mfrow=c(1,2))
+plot(IS_RETAINED ~ CUM_RESIDENT_TERMS_BOT, data, xlab="", las=1)
+plot(IS_RETAINED ~ TRNSFR_UNITS_ENTRY, data, xlab="", las=1)
+```
+7.cross-tabulations:
+```{r}
+xtabs(IS_RETAINED ~ CLASS_LEVEL_STUDENT + RESIDENCY_CODE, data)
+```
+

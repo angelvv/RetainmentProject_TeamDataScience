@@ -1,0 +1,950 @@
+---
+title: "05_Program_DoubleMajor"
+author: "Angel Huang"
+date: "12/9/2020"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1 Prepare data
+## Load libraries
+```{r, message=FALSE}
+# Install EDA related libraries
+library(tidyverse)
+library(emmeans)
+library(ggplot2)
+library(gridExtra)
+#library(plyr)
+library(dplyr) # for group by
+#library(tidyr)
+```
+
+## Load data from revised_df.Rdata
+```{r}
+load("../../RData/revised_df.RData")
+dim(revised_df)
+```
+
+We recall the variable names.
+
+```{r}
+names(revised_df)
+df = revised_df
+```
+
+
+## Variable engineering: From previous 03_tree models, we discovered that credits failed and attempted are the first two main split, based on those split, we will convert failed credits into categories.
+
+### Classification and Regression Tree (CART)
+```{r train}
+library(rpart)
+library(rpart.plot)
+#Build the model
+# For classification tree, response needs to be factor
+# tree doesn't need log transform
+ml_formula = formula(Retained ~ Class +
+                                Residency +
+                                DoubleMajor + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed +
+                                Program)
+# This gives the same result
+#ml_formula = formula(Retained ~ Credits +
+#                                CreditsFailed)
+
+ml_tree = rpart(ml_formula,data=df,cp=0.008) # cp for complexity, smaller cp =more branches
+
+#Summarize the model
+#summary(ml_tree)
+# Visualize the decision tree with rpart.plot
+rpart.plot(ml_tree, box.palette="RdBu", shadow.col="gray", nn=TRUE)
+```
+We fitted a decision tree model with retention rate being the dependent variable and class, residency, double major, enrollment, credits, credits failed, and program as the independent variables. Decision tree is a classification algorithm and uses gini impurity criteria to select splits, which will divide dataset into most homogenous sets. The fact that this tree splits mainly on credits and credits failed, indicating that these are the two of the most important variables for classification. In addition, we discovered the splits used for classification, which is Credits <2.5 and <7.3; splits for CreditsFailed are >=4.8, >=13. The highest retention group are students who earn >=7.3 credits and fail <4.8 credits (retention rate = 0.98, 92% of students are in this group). The lowest retention group (reddest) are students who earn <2.5 credits and fail 11~13 credits (retention rate = 0.28).
+
+First, we do a density plot to visually verify the split
+```{r}
+cdplot(factor(Retained) ~ CreditsFailed, 
+       df,
+       #col=c("lightgoldenrod", "lightcyan"), 
+       ylab = "Percent Retained (black=0, gray=1)", xlab ="Credits Failed", main = "Conditional Density Plot")
+```
+More failed credits, more dropout. The split happens at >=4.8, >=13, consistent with the tree split.
+
+Then density plot on credits attempted.
+```{r}
+cdplot(factor(Retained) ~ Credits, 
+       df,
+       #col=c("lightgoldenrod", "lightcyan"), 
+       ylab = "Percent Retained (black=0, gray=1)", xlab ="Credits Earned", main = "Conditional Density Plot")
+```
+The split happens at <4, <7.3, mostly consistent with the tree split.
+
+## Create new variables
+```{r}
+# convert variables to factor
+df$Failed = cut(
+  df$CreditsFailed,
+  breaks = c(-Inf, 4.8, 13, Inf), # If use 0 for the first one will make all entries with 0 into NA
+  labels = c("Low (-3,4]", "Med (4,12]", "High (12,18]"),
+  right  = TRUE # include right hand number
+)
+df$Earned = cut(
+  df$Credits,
+  breaks = c(-Inf, 2.5, 7.3, Inf),
+  labels = c("Low (0,2]", "Med (2,7]", "High (7,22]"),
+  right  = TRUE # include right hand number
+)
+```
+
+# 3. GLM model
+## Use a full model to predict retention rate
+```{r}
+df$DoubleMajorF = factor(df$DoubleMajor) # convert to factor
+# Use Credits and creditsFailed for a better prediction
+glm1 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed +
+                                Program)^2, 
+            data = df,
+            family = binomial(link = "logit"))
+summary(glm1)
+df$pred = predict(glm1,df[,c("Class","Residency", "DoubleMajorF", "Enrollment","Credits","CreditsFailed","Program")],type="response")
+
+```
+Some interesting significant interactions are: Credits:ProgramBAMJ, DoubleMajor:Credits, DoubleMajor:CreditsFailed.
+
+## Use a full model with split to predict retention rate
+```{r}
+df$DoubleMajorF = factor(df$DoubleMajor) # convert to factor
+# Use Credits and creditsFailed for a better prediction
+glm2 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF + 
+                                Enrollment + 
+                                Earned +
+                                Failed)^2 +
+                                Program, 
+            data = df,
+            family = binomial(link = "logit"))
+summary(glm2)
+df$pred2 = predict(glm2,df[,c("Class","Residency", "DoubleMajorF", "Enrollment","Earned","Failed","Program")],type="response")
+
+# model should not have NA in coefficient
+# change Program without interaction
+# For imbalanced data
+# a new variable 
+```
+```{r}
+# Make a new variable of Earned*Failed
+df$CombinedCredit = paste(df$Earned, df$Failed, sep="_")
+df$DoubleMajorF = factor(df$DoubleMajor) # convert to factor
+# Use Credits and creditsFailed for a better prediction
+glm2 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF + 
+                                Enrollment)^2 +
+                                CombinedCredit +
+                                Program, 
+            data = df,
+            family = binomial(link = "logit"))
+summary(glm2)
+df$pred2 = predict(glm2,df[,c("Class","Residency", "DoubleMajorF", "Enrollment","Earned","Program","CombinedCredit")],type="response")
+
+# model should not have NA in coefficient
+# change Program without interaction
+# For imbalanced data
+# a new variable 
+```
+  
+# 4. Plot for variables of interest (Earned, Failed, Program, DoubleMajor)
+Using a decision tree model, we have identified critical splits of variable "FailedCredits" and "Credits", based on this, we divided FailedCredits into 3 intervals (i.e. Failed): low=0-5, med=5.5-13, high=13.5-Inf, and Credits into 3 intervals (i.e. Earned): low=0-2, med=2.5-7, high=7-Inf, for easier interpretation. 
+
+Here we use box plots to visualize interaction effects between the 4 variables of interest: Earned, Failed, Program, DoubleMajor on (full-GLM-model estimated) probability of return.
+
+## 4.1 Retention rate by Earned and Failed
+### Violin plot -- CDF too narrow (dispersed), can't see shape
+```{r}
+#ggplot(df, aes(x=Earned, y=pred,  fill=Failed)) +
+#  geom_violin() +
+  #geom_boxplot(width=0.1) + theme_minimal()
+```
+### Helper function to get n for each category
+```{r}
+getN <- function(x){
+  return(c(y = 0, label = length(x)))
+}
+getNDir <- function(x){
+  return(c(y = 0, label = N))
+} # Get N directly from summary
+getMedian <- function(x){
+  return(c(y = median(x)*1.05, label = round(median(x),digit=2)))
+}
+getMean <- function(x){
+  return(c(y = mean(x)*1.05, label = round(mean(x),digit=2)))
+}
+getMeanDir <- function(x){
+  return(c(y = y*1.05, label = round(x,digit=2)))
+} # Get Mean directly from summary
+# experiment with the multiplier to find the perfect position
+```
+### Helper function to get std
+```{r}
+## Summarizes data.
+## Gives count, mean, standard deviation, standard error of the mean, and confidence interval (default 95%).
+##   data: a data frame.
+##   measurevar: the name of a column that contains the variable to be summariezed
+##   groupvars: a vector containing names of columns that contain grouping variables
+##   na.rm: a boolean that indicates whether to ignore NA's
+##   conf.interval: the percent range of the confidence interval (default is 95%)
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+    library(plyr)
+
+    # New version of length which can handle NA's: if na.rm==T, don't count them
+    length2 <- function (x, na.rm=FALSE) {
+        if (na.rm) sum(!is.na(x))
+        else       length(x)
+    }
+
+    # This does the summary. For each group's data frame, return a vector with
+    # N, mean, and sd
+    datac <- ddply(data, groupvars, .drop=.drop,
+      .fun = function(xx, col) {
+        c(N    = length2(xx[[col]], na.rm=na.rm),
+          mean = mean   (xx[[col]], na.rm=na.rm),
+          sd   = sd     (xx[[col]], na.rm=na.rm)
+        )
+      },
+      measurevar
+    )
+
+    # Rename the "mean" column    
+    datac <- rename(datac, c("mean" = measurevar))
+
+    datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+
+    # Confidence interval multiplier for standard error
+    # Calculate t-statistic for confidence interval: 
+    # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+    ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+    datac$ci <- datac$se * ciMult
+
+    return(datac)
+}
+```
+
+### Real retention rate by Earned and Failed
+```{r}
+yLim = c(0,100)
+df_plot = df %>%
+  group_by(Earned, Failed) %>%
+  summarise(retained = mean(Retained), n=n())
+df_plot
+ggplot(df_plot,aes(x = Earned, y = retained*100, fill=Failed)) + 
+  geom_bar(position="dodge", stat="identity") +
+  ylab("Percent Returned") +
+  coord_cartesian(ylim=yLim) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  #theme(axis.text.x = element_text(angle =45)) +  # tilt x label
+  
+  # add student count
+  geom_text(data=data.frame(df_plot), 
+            aes(Earned, yLim[1], label=df_plot$n), 
+            position = position_dodge(width=0.9),
+            size=4) +
+  geom_text(data=data.frame(df_plot), 
+            aes(Earned, retained*100.5, label=round(df_plot$retained*100,digit=1)),
+            position = position_dodge(width=0.9),
+            size=4) +
+  theme_bw()
+```
+In low credit group, 27% of student with <=4 failed credits returned, which is very low, whereas 87% of student with 4-12 failed credits returned, indicating students who registered for more credits are more likely to have higher motivation for return. However, when too many credits are failed (>12), only 51% of students returned. In the median credit group, regardless of failed credits, around 75% students returned. In the high credit group, there is no one failed more than 12 credits, and the majority of students failed <=4 credits, and 98% of these students returned. The rest of the students failed 4-12 credits and have 80% returning rate. The group that needs attention most is the one with <=2 credits earned and <=4 credits failed, then is the one with <=2 credits earned and >12 credits failed.
+
+### Predicted retention rate (in glm1) by Earned and Failed
+```{r}
+ggplot(data=df, aes(x=Earned, y=pred, fill=Failed)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(fill = "Failed Credits") +
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+```
+Since we identified a significant interaction effect between earned and failed credits on retention rate in both a GLM model and a decision tree model, now we will investigate further into this interaction effect. The categories for earned and failed credits were defined by the decision tree split shown above, in this way, we can split the data into the most homogeneous groups while enabling easier interpretation.
+When earn less than 2 credits, retention rate is low. Within this group, if failed credit is <=4, the median return rate is the lowest, around 56%, probably because so few credits were attempted in total. Interestingly, when failed 4~12 credits, the return rate increases to 85%, then when more credits are failed, the return rate drops again to around 73%. This implies a combination effect of how many credits are attempted in total versus how many are failed. When earns 2-7 credits, the return rate is similar regardless of failed credits, with a slight decreasing trend with increased failed credits. When earn more than 7 credits, there is no student fail more than 12 credits. The lower failed credit results in highest return rate ~99%, which is also the category with the most number of students.
+This trend is consistent with the real retention rate by earned and failed credits, providing support for the GLM model predictions.
+
+```{r}
+# Better GLM model (Glm2, no NA in coefficient)
+ggplot(data=df, aes(x=Earned, y=pred2, fill=Failed)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(fill = "Failed Credits") +
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+```
+
+### Same but plot Mean +- 95%CI
+```{r}
+# can't do emmeans on the variable that was not in the regression model
+mean_CI <- emmeans(glm1, ~ Credits * CreditsFailed,
+                        type = "response") %>%
+  as.data.frame
+mean_CI
+# Credits=13.29, CreditsFailed =1.01
+# maybe the mean of credits? Should use emtrends for continuous variable
+```
+```{r}
+# NA b/c Program has too many levels, need a simpler regression model
+mean_CI <- emmeans(glm2, ~ Failed,
+                        type = "response") %>%
+  as.data.frame
+mean_CI
+```
+
+```{r}
+glm3 = glm(Retained ~ Earned * Failed, 
+            data = df,
+            family = binomial(link = "logit"))
+summary(glm3)
+mean_CI <- emmeans(glm3, ~ Earned*Failed,
+                        type = "response") %>%
+  as.data.frame
+
+mean_CI
+```
+```{r}
+# https://aosmith.rbind.io/2019/03/25/getting-started-with-emmeans/
+# USE emmeans for estimate CI of prediction
+
+pd = position_dodge(0.75) # move them .05 to the left and right
+ggplot(data=mean_CI, aes(x=Earned, y=prob, group=Failed, color=Failed)) +
+  geom_errorbar(aes(ymin=asymp.LCL,ymax = asymp.UCL),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(color = "Failed Credits") +
+  #stat_summary(aes(y = 0,label), geom = "text", color="black",
+  #                position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = prob*1.05,label = round(prob,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+```
+
+```{r}
+glm4 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF + 
+                                Enrollment + 
+                                Earned +
+                                Failed)^2 + Program, 
+            data = df,
+            family = binomial(link = "logit"))
+#summary(glm4)
+mean_CI <- emmeans(glm4, ~ Earned*Failed,
+                        type = "response") %>%
+  as.data.frame
+sumdf = summarySE(df, measurevar="pred", groupvars=c("Earned","Failed")) # only to get N
+mean_CI$N = c(sumdf$N,NA) # add column of N
+mean_CI
+
+pd = position_dodge(0.75) # move them .05 to the left and right
+ggplot(data=mean_CI, aes(x=Earned, y=prob, group=Failed, color=Failed)) +
+  geom_errorbar(aes(ymin=asymp.LCL,ymax = asymp.UCL),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(color = "Failed Credits") +
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = prob*1.05,label = round(prob,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+  
+
+```
+
+```{r}
+# Wrong: should not use std to calculate CI
+# Move errorbars horizontally so that they don't overlap
+pd = position_dodge(0.75) # move them .05 to the left and right
+sumdf = summarySE(df, measurevar="pred", groupvars=c("Earned","Failed"))
+ggplot(data=sumdf, aes(x=Earned, y=pred, group=Failed, color=Failed)) +
+  geom_errorbar(aes(ymin=pred-ci,ymax = pred+ci),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(color = "Failed Credits") +
+  stat_summary(aes(y = 0.4,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = pred*1.05,label = round(pred,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+```
+
+### Predicted retention rate (in glm2, median) by Earned and Failed
+```{r}
+ggplot(data=df, aes(x=Earned, y=pred2, fill=Failed)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(fill = "Failed Credits") +
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+palette()
+```
+
+```{r}
+# Final plot !!!!
+
+# Calculate CI for correct model
+mean_CI <- emmeans(glm2, ~ CombinedCredit,
+                        type = "response") %>%
+  as.data.frame
+new_CI = mean_CI %>%
+  separate(CombinedCredit, c("Earned", "Failed"), "_") # reconstruct Earned and Failed
+new_CI$Earned = ordered(new_CI$Earned, levels = c("Low (0,2]", "Med (2,7]", "High (7,22]"))
+new_CI$Failed = ordered(new_CI$Failed, levels = c("Low (-3,4]", "Med (4,12]", "High (12,18]"))
+new_CI = new_CI[with(new_CI, order(Earned, Failed)),]
+new_CI
+
+# add N after reordering since only now it matches
+sumdf = summarySE(df, measurevar="pred", groupvars=c("Earned","Failed")) # only to get N
+new_CI$N = c(sumdf$N) # add column of N
+
+pd = position_dodge(0.75) # move them .05 to the left and right
+ggplot(data=new_CI, aes(x=Earned, y=prob, group=Failed, color=Failed)) +
+  geom_errorbar(aes(ymin=asymp.LCL,ymax = asymp.UCL),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=4) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(color = "Failed Credits") +
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3.5) +
+  stat_summary(aes(y = prob*1.1,label = round(prob,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3.5) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw() +
+  scale_colour_manual(values = c("lightcoral", "green4", "royalblue"))
+
+#  scale_color_brewer(type = "qual") # ordered factor has different color scheme
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+  
+
+```
+### Predicted retention rate (in glm2, mean) by Earned and Failed
+```{r}
+# Wrong
+pd = position_dodge(0.75) # move them .05 to the left and right
+sumdf = summarySE(df, measurevar="pred2", groupvars=c("Earned","Failed"))
+ggplot(data=sumdf, aes(x=Earned, y=pred2, group=Failed, color=Failed)) +
+  geom_errorbar(aes(ymin=pred2-ci,ymax = pred2+ci),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Earned Credits") + 
+  labs(color = "Failed Credits") + # Now is color
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = pred2*1.05,label = round(pred2,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+```
+
+
+### Selecting the high earned and low failed group
+```{r}
+df_goodCredit = subset(df, Failed=="Low (-3,4]" & Earned=="High (7,22]")
+```
+### Look for where the outliers come from
+```{r}
+ggplot(data=df_goodCredit, aes(x=Enrollment, y=pred, fill=Enrollment)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(fill = "Enrollment") + 
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(Program)) + 
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+The outliers seem to come from many majors, especially BS, BAED, and more likely from transfer students (although they also have smaller sample size). I've also tried Residency, Class, non of them clearly separate out the outliers.
+
+
+## 4.2 Real retention rate by Program
+```{r}
+df_plot = summarySE(df, measurevar="Retained", groupvars=c("Program")) %>%
+  arrange(Retained) 
+#df_plot = df %>%
+#  group_by(Program) %>%
+#  summarise(retained = mean(Retained), n=n()) %>%
+#  arrange(retained) 
+df_plot
+ggplot(df_plot,aes(x = reorder(Program, Retained), y = Retained*100)) +  
+  ylab("Percent Returned") +
+  xlab("Program") +
+  geom_col() +
+  coord_cartesian(ylim=c(90,100)) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  #theme(axis.text.x = element_text(angle =45)) +  # tilt x label
+  # add student count
+  geom_text(data=data.frame(df_plot), 
+            aes(Program, 90, label=df_plot$N), 
+            position = position_dodge(width=0.9),color="white",
+            size=4) +
+  geom_text(data=data.frame(df_plot), 
+            aes(Program, Retained*100.5, label=round(df_plot$Retained*100,digit=1)),
+            position = position_dodge(width=0.9),
+            size=4) +
+#  ggtitle("Retention Rate by Program") +
+  theme_bw()
+```
+The programs with lowest retention rate is BMUS (Music Performance, 36 students), BACH (College of Arts and Sciences, 848 students), BFA (Studio Arts, 23 students), BSPHS (Pharmaceutical Sciences, 74 students), but all with smaller sample sizes. The programs with highest retention rate is BSBA (Business admin, 1270 students), BAED (School of education, 219 students), and BSIS (Information Science, 84 students).
+
+### Pick 3 programs with the highest number of students as an example: science, art, and business
+```{r}
+df_program = subset(df, Program == 'BS' | Program == 'BA' | Program == 'BSBA')
+```
+### Predicted return by earned and program
+```{r}
+ggplot(data=df_program, aes(x=Program, y=pred, fill=Earned)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(fill = "Earned Credits") + 
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(DoubleMajorF), labeller = as_labeller(c(`0`="Single Major",`1`="Double Major"))) +
+#  ggtitle("Predicted Retention Rate by Double Major, Program, and Earned Credits") +
+  theme_bw() + 
+  scale_color_brewer(type = "qual") # ordered factor has different color scheme
+  
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+Next, we are interested in how would earned credits and double major affects students' return rate in different majors. We picked the three representative programs with the highest number of students: science, art, and business. Y axis indicates the probability of a student to return estimated by a full GLM model. Several interesting take-homes are:
+1. There is a high return rate for business major, regardless of double major status and earned credits. This explains why there is such a high return rate (98.8%) in general.
+2. For BA and BS, if a student earns high credits, there is a very high probability (98%) that they will return.
+3. However, if the student earns low to median credits, double major students are more likely to return (~94%) than single major students (70~80%). In addition, single major students showed a gradient effect of increased credits will result in higher probability of return, whereas double major students remained a high probability of return for both low and median level of earned credits. 
+Thus, the single major students are more sensitive to how many credits they earned, except for students from certain programs such as business. 
+
+### Predicted return by earned and program (mean)
+```{r}
+sumdf = summarySE(df_program, measurevar="pred", groupvars=c("Program","Earned","DoubleMajorF"))
+ggplot(data=sumdf, aes(x=Program, y=pred, color=Earned, group=Earned)) +
+  geom_errorbar(aes(ymin=pred-ci,ymax = pred+ci),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(color = "Earned Credits") + 
+  stat_summary(aes(y = 0.5,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = pred*1.05,label = round(pred,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(DoubleMajorF), labeller = as_labeller(c(`0`="Single Major",`1`="Double Major"))) +
+#  ggtitle("Predicted Retention Rate by Double Major, Program, and Earned Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+### Predicted return by earned and program, enrollment
+```{r}
+ggplot(data=df_program, aes(x=Program, y=pred, fill=Earned)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(fill = "Earned Credits") + 
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(Enrollment)) +
+#  ggtitle("Predicted Retention Rate by Double Major, Program, and Earned Credits") +
+  theme_bw()  
+#  scale_color_brewer(type = "qual") # don't work here
+  
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+### Predicted return by earned and program (mean), 
+```{r}
+glm4 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF + 
+                                Enrollment + 
+                                Earned +
+                                Failed)^2 + Program, 
+            data = df,
+            family = binomial(link = "logit"))
+#summary(glm4)
+mean_CI <- emmeans(glm4, ~ Program*Earned*Enrollment,
+                        type = "response") %>%
+  as.data.frame
+mean_CI = subset(mean_CI, Program == 'BS' | Program == 'BA' | Program == 'BSBA')
+sumdf = summarySE(df_program, measurevar="pred", groupvars=c("Earned","Program","Enrollment")) # only to get N
+mean_CI
+mean_CI$N = c(sumdf$N) # add column of N
+mean_CI
+
+pd = position_dodge(0.75) # move them .05 to the left and right
+ggplot(data=mean_CI, aes(x=Program, y=prob, color=Earned, group=Earned)) +
+  geom_errorbar(aes(ymin=asymp.LCL,ymax = asymp.UCL),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(color = "Earned Credits") +
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = prob*1.05,label = round(prob,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(Enrollment)) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+  
+
+```
+
+```{r}
+sumdf
+c(sumdf$N[1:11],NA,sumdf$N[12:17])
+```
+
+```{r}
+glm4 = glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajorF)^2 + Program*Enrollment*Earned, 
+            data = df,
+            family = binomial(link = "logit"))
+#summary(glm4)
+# in emmeans, + and * are the same, depends on the model
+mean_CI <- emmeans(glm4, ~ Enrollment+Program+Earned,
+                        type = "response") %>%
+  as.data.frame
+mean_CI = subset(mean_CI, Program == 'BS' | Program == 'BA' | Program == 'BSBA')
+sumdf = summarySE(df_program, measurevar="pred", groupvars=c("Earned","Program","Enrollment")) # only to get N
+mean_CI
+mean_CI$N = c(sumdf$N[1:11],NA,sumdf$N[12:17]) # add column of N
+mean_CI
+
+pd = position_dodge(0.75) # move them .05 to the left and right
+ggplot(data=mean_CI, aes(x=Program, y=prob, color=Earned, group=Earned)) +
+  geom_errorbar(aes(ymin=asymp.LCL,ymax = asymp.UCL),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(color = "Earned Credits") +
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = prob*1.05,label = round(prob,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(Enrollment)) +
+#  ggtitle("Predicted Retention Rate by Earned and Failed Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1) # 
+  
+
+```
+
+```{r}
+# Wrong, should use emmeans
+sumdf = summarySE(df_program, measurevar="pred", groupvars=c("Program","Earned","Enrollment"))
+ggplot(data=sumdf, aes(x=Program, y=pred, color=Earned, group=Earned)) +
+  geom_errorbar(aes(ymin=pred-ci,ymax = pred+ci),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(color = "Earned Credits") + 
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = pred*1.05,label = round(pred,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(Enrollment)) +
+#  ggtitle("Predicted Retention Rate by Double Major, Program, and Earned Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+### Predicted return by failed and program (mean), enrollment
+```{r}
+sumdf = summarySE(df_program, measurevar="pred", groupvars=c("Program","Failed","Enrollment"))
+ggplot(data=sumdf, aes(x=Program, y=pred, color=Failed, group=Failed)) +
+  geom_errorbar(aes(ymin=pred-ci,ymax = pred+ci),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(color = "Failed Credits") + 
+  stat_summary(aes(y = 0,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = pred*1.05,label = round(pred,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(Enrollment)) +
+#  ggtitle("Predicted Retention Rate by Double Major, Program, and Earned Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+
+
+### Predicted return by failed and program
+```{r}
+ggplot(data=df_program, aes(x=Program, y=pred, fill=Failed)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(fill = "Failed Credits") + 
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(DoubleMajorF), labeller = as_labeller(c(`0`="Single Major",`1`="Double Major"))) +
+#  ggtitle("Retention Rate by Program") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+Unlike earned credits, when we look at failed credits, it seems like all students are demotivated (have lower probability of return) by increased failed credits, as shown by the gradient decrease in probability of return as failed credits increase. Consistent with previous findings, double major students are more resilient to failed credits in two ways. One is that they have a generally higher probability of return at each failed credit level, which is 10~20% higher than single major students. Second is that they are less sensitive to increased failed credits (less steep slope) compared to single major students. In addition, business students are still the most resilient and have higher probability of return. However we now see that even single major business students are demotivated by a high level of failed credits (>12 credits failed).
+
+### Predicted return by failed and program (mean)
+```{r}
+sumdf = summarySE(df_program, measurevar="pred", groupvars=c("Program","Failed","DoubleMajorF"))
+ggplot(data=sumdf, aes(x=Program, y=pred, color=Failed, group=Failed)) +
+  geom_errorbar(aes(ymin=pred-ci,ymax = pred+ci),width=0,position=pd,size=1) + 
+  #geom_line(position=pd) + 
+  geom_point(position=pd,size=3) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(color = "Failed Credits") + 
+  stat_summary(aes(y = 0.5,label = N), geom = "text", color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  stat_summary(aes(y = pred*1.05,label = round(pred,digit=2)), geom = "text",color="black",
+                  position = position_dodge(width = 0.75), size=3) +
+  facet_grid(col = vars(DoubleMajorF), labeller = as_labeller(c(`0`="Single Major",`1`="Double Major"))) +
+#  ggtitle("Predicted Retention Rate by Double Major, Program, and Earned Credits") +
+  theme_bw()
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+```
+
+
+### Real retention rate by Earned and Program
+```{r}
+yLim = c(0,100)
+df_plot = summarySE(df, measurevar="Retained", groupvars=c("Program","Earned"))
+#df_plot
+ggplot(df_plot,aes(x = Program, y = Retained*100, fill=Earned)) + 
+  geom_bar(position="dodge", stat="identity") +
+  ylab("Percent Returned") +
+  coord_cartesian(ylim=yLim) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  #theme(axis.text.x = element_text(angle =45)) +  # tilt x label
+  
+  # add student count
+  geom_text(data=data.frame(df_plot), 
+            aes(Program, yLim[1], label=df_plot$N), 
+            position = position_dodge(width=0.9),
+            size=2) +
+  geom_text(data=data.frame(df_plot), 
+            aes(Program, Retained*100.5, label=round(df_plot$Retained*100,digit=1)),
+            position = position_dodge(width=0.9),
+            size=3)
+```
+Program with lowest % return is low credit students in BSN (1/3 returned), BFA (1/2 returned), BSPH(3/6 returned), BSPHS (1/2 returned). 
+
+## Predicted retention rate by Earned and All Program
+```{r}
+ggplot(data=df, aes(x=Program, y=pred, fill=Earned)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  labs(fill = "Earned Credits") + 
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=1.7) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=2)
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Program and Earned on retention rate:
+For BA (5749 students), rate is >75%, lowest for students earned 2-7 credits.
+For BACH (College of Arts and Sciences, 848 students), 
+For BAED (School of education, 219 students), retention rate is high, even for students earned <=2 credits, the retention rate is ~85%.
+For BAMJ (School of Media and Journalism, 676 students), retention rate is high in general, but lower (~75%) for students earned 2-7 credits.
+For BFA (Studio Arts, 23 students), low earned credits reduce retention rate to 50%.
+For BMUS (Music Performance, 36 students), sample size is small, but retention rate is almost 100%.
+For BS (4524 students), higher earned credits increases retention rate.
+For BSBA (Business admin, 1270 students), all retention rate is around 95%.
+For BSIS (Information Science, 84 students), sample size is small, but retention rate is almost 100%.
+For BSN (Nursing, 424 students), they have the lowest retention rate among programs, especially when earned credit is low, rate <25%, or medium, rate <50%. However, when earned high credits, return rate is very high >95%.
+For BSPH (Public Health, 312 students), for low and median earned credits, rate ~50%, for high credits, ~100%.
+For BSPHS (Pharmaceutical Sciences, 74 students), small sample size. When earned credits<=2, rate~50%, otherwise rate ~100%.
+
+## 4.3 Retention rate by Failed and All Program
+### Real retention rate by Failed and Program
+```{r}
+yLim = c(0,100)
+df_plot = summarySE(df, measurevar="Retained", groupvars=c("Program","Failed"))
+
+#df_plot
+ggplot(df_plot,aes(x = Program, y = Retained*100, fill=Failed)) + 
+  geom_bar(position="dodge", stat="identity") +
+  ylab("Percent Returned") +
+  coord_cartesian(ylim=yLim) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  #theme(axis.text.x = element_text(angle =45)) +  # tilt x label
+  
+  # add student count
+  geom_text(data=data.frame(df_plot), 
+            aes(Program, yLim[1], label=df_plot$N), 
+            position = position_dodge(width=0.9),
+            size=2) +
+  geom_text(data=data.frame(df_plot), 
+            aes(Program, Retained*100.5, label=round(df_plot$Retained*100,digit=1)),
+            position = position_dodge(width=0.9),
+            size=3)
+```
+
+
+### Predicted retention rate by Failed and Program
+```{r}
+ggplot(data=df, aes(x=Program, y=pred, fill=Failed)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Program") + 
+  theme(axis.text=element_text(size=6)) +
+  labs(fill = "Failed Credits") +
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=1.7) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=2)
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Program and Earned on retention rate:
+For all programs, if failed credits <=4, return rate is ~100%.
+When failed 4-12 credits, BFA and BSPH has the lowest return rate, ~50%.
+When failed >12 credits, BSN and BSPH has the lowest return rate, ~13% and ~38% respectively. Should be the focus of intervention.
+
+
+## 4.4 Retention rate by Earned and DoubleMajor
+### Real retention rate by Earned and DoubleMajor
+```{r}
+yLim = c(0,100)
+df_plot = summarySE(df, measurevar="Retained", groupvars=c("DoubleMajor","Earned"))
+#df_plot
+ggplot(df_plot,aes(x = DoubleMajor, y = Retained*100, fill=Earned)) + 
+  geom_bar(position="dodge", stat="identity") +
+  ylab("Percent Returned") +
+  coord_cartesian(ylim=yLim) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  #theme(axis.text.x = element_text(angle =45)) +  # tilt x label
+  
+  # add student count
+  geom_text(data=data.frame(df_plot), 
+            aes(DoubleMajor, yLim[1], label=df_plot$N), 
+            position = position_dodge(width=0.9),
+            size=4) +
+  geom_text(data=data.frame(df_plot), 
+            aes(DoubleMajor, Retained*100.5,   label=round(df_plot$Retained*100,digit=1)),
+            position = position_dodge(width=0.9),
+            size=4)
+```
+Main difference is in low credit and med credit group, 92% of double major students returned whereas 74% of single major students returned.
+
+### Predicted retention rate by Earned and DoubleMajor
+```{r}
+ggplot(data=df, aes(x=DoubleMajorF, y=pred, fill=Earned)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Double Major") + 
+  theme(axis.text=element_text(size=6)) +
+  labs(fill = "Earned Credits") +
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=4) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=4)
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Double major and Earned on retention rate:
+If a student earns >7 credits, retention rate is 99% regardless of double major status. If a student earned <=7 credits, retention rate is lower for single major than double major (79% vs. 95%). 
+
+## 4.5 Retention rate by Failed and DoubleMajor
+### Real retention rate by Failed and DoubleMajor
+```{r}
+yLim = c(0,100)
+df_plot = summarySE(df, measurevar="Retained", groupvars=c("DoubleMajor","Failed"))
+
+#df_plot
+ggplot(df_plot,aes(x = DoubleMajor, y = Retained*100, fill=Failed)) + 
+  geom_bar(position="dodge", stat="identity") +
+  ylab("Percent Returned") +
+  coord_cartesian(ylim=yLim) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  #theme(axis.text.x = element_text(angle =45)) +  # tilt x label
+  
+  # add student count
+  geom_text(data=data.frame(df_plot), 
+            aes(DoubleMajor, yLim[1], label=df_plot$N), 
+            position = position_dodge(width=0.9),
+            size=4) +
+  geom_text(data=data.frame(df_plot), 
+            aes(DoubleMajor, Retained*100.5,   label=round(df_plot$Retained*100,digit=1)),
+            position = position_dodge(width=0.9),
+            size=4)
+```
+Double major has higher return rate than single major, in all levels of failed credits. Students with single major are more sensitive to failed credits (have steeper slope of percent retained as failed credits increase), whereas double major students are more resilient.
+
+### Predicted retention rate by Earned and DoubleMajor
+```{r}
+ggplot(data=df, aes(x=DoubleMajorF, y=pred, fill=Failed)) +
+  geom_boxplot(outlier.size = 0.1) + 
+  ylab("GLM Estimated Probability of Return") +
+  xlab("Double Major") + 
+  theme(axis.text=element_text(size=6)) +
+  labs(fill = "Failed Credits") +
+  stat_summary(fun.data = getN, geom = "text",
+                  position = position_dodge(width = 0.75), size=4) +
+  stat_summary(fun.data = getMedian, geom = "text",
+                  position = position_dodge(width = 0.75), size=4)
+  #geom_dotplot(binaxis='y', stackdir='center',dotsize=0.1)
+
+```
+Interaction effect of Double major and Failed on retention rate:
+Single major students have lower return rate than double major, regardless of how many credits earned. When failed more credits, single major students are more sensitive and more likely to dropout.  

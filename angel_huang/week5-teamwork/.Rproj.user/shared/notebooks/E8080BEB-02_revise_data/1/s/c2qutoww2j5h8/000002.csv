@@ -1,0 +1,5 @@
+"0","class_levels <- sort(unique(students_df$CLASS_LEVEL_STUDENT))[c(1,3,2,4)]"
+"0","mod_df <- students_df"
+"0","mod_df$CLASS_LEVEL_STUDENT <-"
+"0","  factor(students_df$CLASS_LEVEL_STUDENT, "
+"0","             levels = class_levels)"

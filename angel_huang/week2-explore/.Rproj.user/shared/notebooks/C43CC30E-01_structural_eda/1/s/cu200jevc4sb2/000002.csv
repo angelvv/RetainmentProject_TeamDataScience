@@ -1,0 +1,10 @@
+"0","mod_df %>%"
+"0","  group_by(IS_RETAINED, IS_RETAINED_DESC) %>%"
+"0","  summarize(n = n()) %>%"
+"0","  select(IS_RETAINED, n) %>%"
+"0","  pivot_wider(id_cols = IS_RETAINED, names_from = IS_RETAINED, values_from = n) %>%"
+"0","  select(NotRetained = `0`, Retained = `1`) %>%"
+"0","  mutate(Pct_Retained = round(100* Retained/(Retained + NotRetained), 1))"
+"2","Error: `n()` must only be used inside dplyr verbs.
+[90mRun `rlang::last_error()` to see where the error occurred.[39m
+"

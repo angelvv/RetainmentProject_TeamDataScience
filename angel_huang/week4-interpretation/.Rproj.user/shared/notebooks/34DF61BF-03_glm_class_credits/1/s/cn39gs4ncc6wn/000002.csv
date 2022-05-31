@@ -1,0 +1,2 @@
+"0","mod2_df <- mod_df %>%"
+"0","  mutate(CREDITS_FAILED = CREDIT_HOURS_ATT - CREDIT_HOURS_EARNED)"

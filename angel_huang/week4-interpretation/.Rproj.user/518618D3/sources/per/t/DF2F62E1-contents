@@ -1,0 +1,241 @@
+---
+title: "Logistic Regression: Class and Credits"
+author: "Perry Haaland"
+date: "11/3/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(emmeans)
+```
+
+## Read the data
+
+We are all working from a common dataset this week.
+
+```{r}
+load("../../data/students_df.RData")
+dim(students_df)
+```
+
+We recall the variable names.
+
+```{r}
+names(students_df)
+```
+
+## Logistic Regression for class level
+
+We start by making the class level an ordered factor based on student's year in school.
+
+```{r}
+class_levels <- sort(unique(students_df$CLASS_LEVEL_STUDENT))[c(1,3,2,4)]
+mod_df <- students_df
+mod_df$CLASS_LEVEL_STUDENT <-
+  factor(students_df$CLASS_LEVEL_STUDENT, 
+             levels = class_levels)
+
+class(mod_df$CLASS_LEVEL_STUDENT)
+levels(mod_df$CLASS_LEVEL_STUDENT)
+```
+
+We verify that the contrasts are as we expect them to be; namely, FR is the intercept and each coefficient is the comparison of that year against FR.
+
+```{r}
+contrasts(mod_df$CLASS_LEVEL_STUDENT)
+```
+
+
+```{r}
+fit1 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+summary(fit1)
+```
+
+
+```{r, message=F}
+class_eff_df <- emmeans(fit1, ~ CLASS_LEVEL_STUDENT,
+                        type = "response") %>%
+  as.data.frame
+class_eff_df
+```
+We can get more specific with contrasts later, but we can see that FR and SR have roughly the same retention rate. SO and JR has roughly the same rates. SO and JR have a higher retention rate than SR but not significantly higher than FR.
+
+```{r}
+class_eff_df %>%
+  ggplot(aes(x = CLASS_LEVEL_STUDENT, y = prob)) +
+    geom_point() +
+    geom_line(aes(x = 1:4, y = prob)) +
+    geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), 
+                  width = .1) +
+    labs(y = "Probability of Retention",
+      title = "GLM Main Effects Plot for Class in Year") +
+    scale_y_continuous(breaks = seq(.9, 1, by = .01), 
+                       limits = c(.9, 1)) +
+    theme(text = element_text(size = 10))
+```
+
+
+## Credits earned
+
+There are several ways to think about credit hours. How many hours the students attempted or completed andnd how many that they failed to complete. In this section we are going to look at the impact of credit hours earned. We wonder whether or not completing more credit hours is likely to result in a higher retention rate.
+
+
+First we look at a conditional density plot. This plot suggests that the more credits earned, the more likely a student is to return.
+
+```{r}
+cdplot(factor(IS_RETAINED) ~ CREDIT_HOURS_EARNED, 
+       mod_df,
+       col=c("lightgoldenrod", "lightcyan"), 
+       ylab = "Retention", xlab ="Credits Earned", main = "Conditional density plot")
+```
+
+### Full model with credits earned
+
+We already know that class year is important, so we leave that in the model and we allow it to interact first with hours earned and then with hours failed. We first note that the AIC is lower with this model than the first one.
+
+
+```{r}
+fit2 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+summary(fit2)
+```
+We note that this model is significantly better than the model with just class year.
+
+```{r}
+anova(fit1, fit2, test = "LR")
+```
+
+### Interaction betweeen class and credits earned
+
+Next we consider the contribution of the interaction term between class and credits. 
+
+```{r}
+fit2a <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT + CREDIT_HOURS_EARNED, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+summary(fit2a)
+```
+By comparing the models we see that the interaction terms produces a better fitting model.
+
+```{r}
+anova(fit2a, fit2, test = "LR")
+```
+
+### Understanding the interaction
+
+The following table shows the estimated slope of probability of retention per credit hour earned for each class. The biggest effect is for FR. The smallest effect is for JR.
+
+```{r}
+fit2_emtrends <- emtrends(fit2, "CLASS_LEVEL_STUDENT", 
+         var = "CREDIT_HOURS_EARNED",
+         transform = "response")
+fit2_emtrends
+```
+We see in the figure below, that earning more credit hours has the biggest positive impact on retention for FR. The impact decreases for SO and JR, and SR.
+
+```{r}
+plot(fit2_emtrends)
+```
+
+## Logistic regresion for credits failed
+
+We are interested in whether a high number credits failed would reduce retention. We create a new variable for the number of hours failed. 
+
+```{r}
+mod2_df <- mod_df %>%
+  mutate(CREDITS_FAILED = CREDIT_HOURS_ATT - CREDIT_HOURS_EARNED)
+```
+
+The following conditional density plot suggests that the more credits that were attempted but failed, the lower the retention rate.
+
+```{r}
+cdplot(factor(IS_RETAINED) ~ CREDITS_FAILED, 
+       mod2_df,
+       col=c("lightgoldenrod", "lightcyan"), 
+       ylab = "Retention", xlab ="Credits FAILED", main = "Conditional density plot")
+```
+
+```{r}
+fit3 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDITS_FAILED, 
+            data = mod2_df,
+            family = binomial(link = "logit"))
+summary(fit3)
+```
+
+We next consider whether or not the interaction is important. The test below suggests that the interaction is signficant. So the effect varies by class year.
+
+```{r}
+fit3a <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT + CREDITS_FAILED, 
+            data = mod2_df,
+            family = binomial(link = "logit"))
+anova(fit3a, fit3, test = "LR")
+```
+
+Next we review the impact of credits failed to get a deeper insight.
+
+```{r}
+fit3_emtrends <- emtrends(fit3, "CLASS_LEVEL_STUDENT", 
+         var = "CREDITS_FAILED",
+         transform = "response")
+fit3_emtrends
+```
+Failing to earn credits for courses attempted, reduces retention rate. We can see that failing credits has a the biggest impact on FR and the least impact on JR. 
+```{r}
+plot(fit3_emtrends)
+```
+
+## Combining both credits earned and failed
+
+Realistically speaking, it may be true that one or the other of the measures of success is sufficient for predicting retention. We explore that below.
+
+We begin by plotting the two variables against each other. We see that there is a strong relationship. For example, CREDITS_FAILED is almost always less than CREDIT_HOURS_EARNED.
+
+```{r}
+mod2_df %>%
+  ggplot(aes(x = CREDIT_HOURS_EARNED, 
+             y = CREDITS_FAILED)) +
+  geom_point()
+```
+We next fit the model with both credit variables.
+
+```{r}
+fit4 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDITS_FAILED +
+              CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED, 
+            data = mod2_df,
+            family = "binomial")
+```
+
+First we test whether or not adding CREDITS_FAILED when the other is already in the model is helpful. We see that that is credit hours earned is in the model, adding credits failed does not produce a significant improvement.
+
+```{r}
+anova(fit2, fit4, test = "LR")
+```
+
+For completeness, we also consider the reverse order. We see that if credit hours failed is already in the model, there is value in adding credit hours earned.
+
+```{r}
+anova(fit3, fit4, test = "LR")
+```
+We summarize the model fits below. We see that the model with credit hours earned is the best combination of explanatory power and parsimony.
+
+
+```{r}
+anova(fit1, fit2, fit3, fit4)
+```
+## Conclusions
+
+Class level matters for retention rate. Juniors and Sophomores have the highest retention rates with First Year and Seniors having lower retention rates.
+
+Both credits earned and credits failed have a significant effect on retention rate. The effect is significantly different for different class years.
+
+The best model so far is class level interacting with credits earned.
+
+For all students, the more credits they earn they more likely they are to return. The more credits the fail the less likely they are to return.
+
+First Years and Seniors are most affected by credits earned. Both completing or failing credits has a bigger impact on retention rate than it does for Sophomores or Juniors.
+

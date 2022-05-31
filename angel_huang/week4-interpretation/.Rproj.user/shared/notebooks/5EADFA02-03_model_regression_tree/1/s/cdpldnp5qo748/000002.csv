@@ -1,0 +1,16 @@
+"0","#Predict using the model and find best cutoff"
+"0","x = subset(test,selext=c(""IS_RETAINED"",""IS_RETAINED_DESC""))"
+"0","y = test$IS_RETAINED"
+"0","test$prob_lreg = predict(ml_log2,x,type=""response"")"
+"0","library(InformationValue)"
+"2","package ‘InformationValue’ was built under R version 3.6.3"
+"2","Registered S3 method overwritten by 'data.table':
+  method           from
+  print.data.table     
+"
+"0","optCutOff = optimalCutoff(test$IS_RETAINED, test$prob_lreg)[1] "
+"0","optCutOff #=0.63"
+"1","[1]"
+"1"," 0.63"
+"1","
+"

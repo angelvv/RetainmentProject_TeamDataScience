@@ -1,0 +1,4 @@
+"0","# Plot response variable"
+"0","ggplot(data = df) +"
+"0","  geom_bar(mapping = aes(x = IS_RETAINED_DESC))"
+"0",""

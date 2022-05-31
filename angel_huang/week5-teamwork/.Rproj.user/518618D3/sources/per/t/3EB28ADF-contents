@@ -1,0 +1,110 @@
+---
+title: "03. Full Logistic Regression Model"
+author: "Angel Huang modified from Perry Haaland"
+date: "11/29/2020"
+output: 
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(emmeans)
+```
+
+In this document, I'm going to look at fitting a GLM model with all of the terms that have been suggested so far by other team members.
+
+## Load the data
+
+We are all working from a common data set this week.
+
+```{r}
+load("revised_df.RData")
+dim(revised_df)
+```
+
+We recall the variable names.
+
+```{r}
+names(revised_df)
+```
+
+## Logistic Regression with all terms
+
+In this analysis, I am going to start with the "big" model that has all of the terms and interactions. Unfortunately, the model containing MajorDiv failed to converge (result not shown). The model with the remaining terms is fit below.
+
+
+```{r}
+fit_all <- glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajor + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed +
+                                Program)^2, 
+            data = revised_df,
+            family = binomial(link = "logit"))
+
+```
+Noted that fitted probabilities 0 or 1 occurred.
+
+We can see from the table below.
+
+```{r}
+aov_all <- anova(fit_all, test = "LR")
+aov_all
+```
+
+## Pareto Plot of Effects
+
+We are going to use the AOV output to make a graph. Note that P-values and Deviance give the same ordering when not including "Program", but different ordering when including "Program".
+
+```{r}
+aov_df <- as.data.frame(aov_all)
+## fix the last name to make it easier
+names(aov_df)[5] <- "Pvalue"
+names(aov_df)[4] <- "Resid.Dev"
+aov_df$Term = rownames(aov_df)
+rownames(aov_df) <- NULL
+## first row is the intercept
+aov_df <- aov_df[-1,]
+## arrange from most to least significant
+aov_df <- aov_df %>%
+  select(Term, Deviance, Pvalue) %>%
+  arrange(Pvalue) 
+aov_df
+```
+
+Now we make the Pareto Plot.
+
+```{r}
+aov_df %>%
+  ggplot() +
+    geom_col(aes(y = -log10(Pvalue), x = reorder(Term, -Pvalue))) +
+      geom_hline(yintercept = -log10(.05), 
+                 linetype = "dashed", color = "red") +
+    coord_flip() +
+  labs(y = "-log10 (P-Value from GLM)",
+       x = "",
+       title = "Pareto Plot of Effects from GLM Model")
+
+```
+The Pareto plot above shows the terms from the GLM logistic regression fit with Retention as the response. The terms are sorted from top to bottom from most to least significant. The model contained the main effects and all of the possible two-factor interactions:
+
+ * Credits = credit hours earned
+ * CreditsFailed = credit hours earned - credit hours attempted
+ * DoubleMajor = Yes = 1, No = 0
+ * Enrollment = Original enrollment status: New Student or New Transfer Student
+ * Program = First major degree
+ * Class = class year: FR, SO, JR, Sr
+ * Residency = In-state, Out-of-state
+ 
+The red, vertical dashed line is the significance level of .05.
+
+We note that the different levels of the descriptors Class, Residency, Enrollment, and DoubleMajor have different retention rates. So for example, In-state and Out-of-state residents have different retention rates, in general. The two closely related variables Credits and CreditsFailed seem to capture a dynamic that affects the retention rates overall and also differentially within the different student groups. 
+
+The model with MajorDiv did not converge, so we have not shown any results for that. It will need to be investigated separately.
+
+We hypothesize that the two credits variables have an important impact on the student's perceived progress toward a degree.
+
+

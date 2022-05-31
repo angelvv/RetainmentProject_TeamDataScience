@@ -1,0 +1,32 @@
+{
+    "id": "485F47D6",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1603903904163.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "expression": "students_df",
+        "caption": "students_df",
+        "totalObservations": 14238,
+        "displayedObservations": 14238,
+        "variables": 37,
+        "cacheKey": "C55EC039",
+        "object": "students_df",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=students_df&cache_key=C55EC039&max_cols=50",
+        "preview": 0
+    },
+    "folds": "",
+    "lastKnownWriteTime": 33495917372309614,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1603903904163,
+    "read_only": false,
+    "read_only_alternatives": []
+}

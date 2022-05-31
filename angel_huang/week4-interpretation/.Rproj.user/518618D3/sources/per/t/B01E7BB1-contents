@@ -1,0 +1,142 @@
+---
+title: "Logistic Regression: Interactions"
+author: "Perry Haaland"
+date: "11/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(emmeans)
+```
+
+## Read the data
+
+We are all working from a common data set this week.
+
+```{r}
+load("../../data/students_df.RData")
+dim(students_df)
+```
+
+We recall the variable names.
+
+```{r}
+names(students_df)
+```
+
+## Logistic Regression for class level, residency, and credits earned
+
+As before, we start by making the class level an ordered factor based on student's year in school.
+
+```{r}
+class_levels <- sort(unique(students_df$CLASS_LEVEL_STUDENT))[c(1,3,2,4)]
+mod_df <- students_df
+mod_df$CLASS_LEVEL_STUDENT <-
+  factor(students_df$CLASS_LEVEL_STUDENT, 
+             levels = class_levels)
+```
+
+We fit the model from last week, plus the different possible additions of RESIDENCY up to the model with all two way interactions an expanded model and test to see what is the contribution of residency. We conclude that residency does affect retention rate, but that it doesn't interact with year in school or credits earned.
+
+```{r}
+fit1 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+fit2 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED +
+               RESIDENCY, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+fit3 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED +
+              CLASS_LEVEL_STUDENT*RESIDENCY, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+fit4 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*CREDIT_HOURS_EARNED +
+              CLASS_LEVEL_STUDENT*RESIDENCY +
+              RESIDENCY*CREDIT_HOURS_EARNED, 
+            data = mod_df,
+            family = binomial(link = "logit"))
+fit5 <- glm(IS_RETAINED ~ CLASS_LEVEL_STUDENT*RESIDENCY*CREDIT_HOURS_EARNED,
+            data = mod_df,
+            family = binomial(link = "logit"))
+anova(fit1, fit2, fit3, fit4, fit5, test = "LR")
+```
+
+```{r}
+summary(fit2)
+```
+
+```{r}
+anova(fit2)
+```
+## Main Effect of Class Level
+
+Note that we are going to do the model terms estimation using the package `emmeans`.
+
+```{r, message=F}
+effects1_df <- emmeans(fit5, ~ CLASS_LEVEL_STUDENT,
+                        type = "response") %>%
+  as.data.frame
+effects1_df
+```
+We can get more specific with contrasts later, but for now we can make some informative graphs from these estimates.
+
+```{r}
+effects1_df %>%
+  ggplot(aes(x = CLASS_LEVEL_STUDENT, y = prob)) +
+    geom_point() +
+    geom_line(aes(x = 1:4, y = prob)) +
+    geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), 
+                  width = .1) +
+    labs(y = "Probability of Retention",
+      title = "GLM Main Effects Plot for Class Level") +
+    scale_y_continuous(breaks = seq(.9, 1, by = .01), 
+                       limits = c(.9, 1)) +
+    theme(text = element_text(size = 10))
+```
+The class year of a student was found to have a significant effect on the retention rate. The probability of retention for each class year, as shown on the graph above, was estimated from the GLM model. Asymptotic 95% confidence intervals were calculated and are displayed as vertical bars. We see the retention rate steadily increases from FR to SO to JR. Then it declines for seniors that did not graduate (SR). As a general rule, we would say that two groups whose confidence intervals do not overlap have significantly different retention rates. From the graph above we see that JR have a significantly higher retention rate than FR and also than SR. 
+
+## Main Effect of Residency
+
+```{r, message=F}
+effects2_df <- emmeans(fit5, ~ RESIDENCY,
+                        type = "response") %>%
+  as.data.frame
+effects2_df
+```
+
+
+```{r}
+effects2_df %>%
+  ggplot(aes(x = RESIDENCY, y = prob)) +
+    geom_point() +
+    geom_line(aes(x = 1:2, y = prob)) +
+    geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL), 
+                  width = .1) +
+    labs(y = "Probability of Retention",
+      title = "GLM Main Effects Plot for RESIDENCY") +
+    scale_y_continuous(breaks = seq(.9, 1, by = .01), 
+                       limits = c(.9, 1)) +
+    theme(text = element_text(size = 10))
+```
+The residency of a student was found to have a significant effect on the retention rate. The probability of retention for in-state residents was significantly higher than for out-of-state residents. Retention rates shown in the figure above were estimated from the GLM model. Asymptotic 95% confidence intervals were calculated and are displayed as vertical bars.  
+
+## Main Effect of Credits Earned
+
+```{r}
+fit5_emtrends <- emtrends(fit5, 
+         var = "CREDIT_HOURS_EARNED",
+         transform = "response")
+fit5_emtrends
+```
+
+
+### I need to do some work on this graph to be sure it is correct and that it looks better
+```{r}
+fit5_emtrends@levels$CREDIT_HOURS_EARNED <- ""
+plot(fit5_emtrends,
+     xlab = "Change in Retention Rate per Credit Earned",
+     ylab = "")
+```
+

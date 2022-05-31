@@ -1,0 +1,2 @@
+"0","# Plot categorical variables against response variable"
+"0","ggplot(data = df) +"
