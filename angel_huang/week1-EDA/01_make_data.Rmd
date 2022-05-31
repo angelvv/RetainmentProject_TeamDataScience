@@ -1,0 +1,23 @@
+---
+title: "01_make_data"
+author: "Angel Huang"
+date: "October 13, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# 1. Load data into dataframe
+```{r}
+setwd("C:/Dropbox (Frohlich Lab)/Frohlich Lab Team Folder/Codebase/CodeAngel/STOR765_Fall2020_TeamDataScience/data/")
+df = read.csv('INIT_TEST_FILE.csv',header=T)
+summary(df)
+```
+
+# save data
+```{r}
+save(df,file="INIT_TEST_FILE.Rda")
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

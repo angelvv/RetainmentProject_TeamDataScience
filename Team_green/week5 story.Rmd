@@ -1,0 +1,180 @@
+---
+title: "Week5 plot"
+author: "Zhaoqi Liu"
+date: "12/13/2020"
+output: html_document
+---
+
+```{r,echo=FALSE}
+load("~/Downloads/STOR 765 consulting/STOR765_FALL2020_TeamDataScience/RData/revised_df.RData")
+```
+
+```{r,echo=FALSE,message=FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r,echo=FALSE}
+df<-revised_df
+df$Residency<-as.factor(revised_df$Residency)
+df$DoubleMajor<-as.factor(revised_df$DoubleMajor)
+df$Enrollment<-as.factor(revised_df$Enrollment)
+df$Program<-as.factor(revised_df$Program)
+```
+
+```{r,echo=FALSE,warning=FALSE}
+fit_all <- glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajor + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed+
+                                Program)^2, 
+            data = df,
+            family = binomial(link = "logit"))
+#Since the program should be program_degree rather than program_code, I rerun the code and found it may be more appropriate to use the full model rather than the reduced one. 
+```
+
+```{r,eval=FALSE,echo=FALSE}
+fit_reduced <- glm(Retained ~ Class + Residency + DoubleMajor + Enrollment + 
+                              Credits + CreditsFailed+TestCredits + Program +
+                            Class*(Enrollment+TestCredits) + 
+                            DoubleMajor*(Class+CreditsFailed) + 
+                            Program*Enrollment+
+                            Credits*(Class+DoubleMajor+Enrollment+
+                                       CreditsFailed+TestCredits+Program),
+                            
+            data = df,
+            family = binomial(link = "logit"))
+```
+
+```{r,eval=FALSE,echo=FALSE}
+anova(fit_all,test="LR")
+```
+
+
+```{r,eval =FALSE,echo=FALSE}
+anova(fit_reduced,fit_all,test="LR")
+#There is a lack of fit. So we will use the full model as the predict model. 
+```
+
+
+```{r,echo=FALSE}
+pred<-predict(fit_all,type="response")
+df$pred<-pred
+```
+
+
+```{r,echo=FALSE}
+cat_creditfail<-cut(revised_df$CreditsFailed,breaks = seq(-3,18,3),include.lowest = TRUE)
+
+cat_credits<-ifelse(revised_df$Credits<12,"less than 12 credits","greater than or equal to 12 credits" )
+#levels(cat_credits)
+cat_credits<-factor(cat_credits, levels = c("less than 12 credits","greater than or equal to 12 credits"))
+cat_credit2<-cut(revised_df$Credits,breaks = c(seq(0,18,3),22),include.lowest = TRUE, right=FALSE)
+```
+
+```{r,echo = FALSE}
+df$cat_creditfail<-cat_creditfail
+df$cat_credit<-cat_credits
+df$cat_credit2<-cat_credit2
+```
+
+```{r,echo=FALSE}
+#return the position and text lable 
+#getN <- function(x){
+#  return(c(y = 0, label = length(x)))
+#}
+#when the y axis not start at 0 
+getN <- function(x){
+  return(c(y = 0, label = length(x)))
+}
+getN_scaled<- function(x){
+  return(c(y = 0.8, label = length(x)))
+}
+getMean <- function(x){
+  return(c(y = mean(x), label = round(mean(x),digit=2)))
+}
+```
+
+
+##### Story: Double Major affects retention rate based on student's performance
+
+```{r,echo=FALSE}
+df%>%ggplot(aes(x=cat_credit, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  scale_fill_discrete(labels =c("No","Yes"))+
+  labs(title = "Predicted Retention Rate with Double Major",
+       subtitle = "For Students earns less than or at least 12 credits")+
+  xlab("Earned Credits")+
+  ylab("Predicted Retention Rate")+
+  theme_bw()
+```
+
+In the GLM model, we found that the interaction term between `Double Major` and `Credits` has a significant positive effect on retention, which means for the same earned credits, students with a double major are more likely to return to school. This is reasonable because students with a double major tend to devote more time to studies and takes more time to graduate. What's more, it should be noticed that the `Double Major` feature affects more on students with a bad performance. 
+
+At UNC, the minimum course load for undergraduates in a single semester is 12 academic credit hours. If students register less than 12 credits in a semester, they need the permission from their dean. If students fail some credits and finally earn less than 12 credits at the end the semester, they may get themselves into troubles academically. So we divide students into two categories based on whether the students earn at least 12 credits in a semester, and make this plot. 
+
+We can see that double major affects the retention rate of students in two categories in different ways. For students who have earned enough credits, whether they have a second major doesn't affect much on the predicted retention rate. They both have high retention probabilities, and their mean retention probabilities are 0.98 and 0.99. However, for students who have earned less than 12 credits, if they have a double major, their mean retention probability will increase by 0.09. Also, the double-major student's IQR range of the predicted retention probability is smaller, which means the data is less spread. 
+
+We also want to know what role failed credits plays here. We divide students into two categories based on whether they earn enough credits at the end of semester. We also classify creditsfailed into sequence with an interval of three since most classes are 3 credits.
+```{r, echo=FALSE}
+yn<-c(0.85,0.89,0.84,0.74,0.8,0.66,0.7) # mean prob of no double major 
+yy<-c(0.98,0.97,0.94,0.85,0.93,0.81,0.75)#mean prob of students with a double major
+x<-c(1,2,3,4,5,6,7)
+dn<-as.data.frame(cbind(x,yn))
+dy<-as.data.frame(cbind(x,yy))
+coefsn<-coef(lm(yn~x,dn))
+coefsy<-coef(lm(yy~x,dy))
+
+p<-df%>%filter(cat_credit=="less than 12 credits")%>%
+  ggplot(aes(x=cat_creditfail, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  scale_fill_discrete(labels =c("No","Yes"))+
+  labs(title = "Predicted Retention Rate with Double Major and Failed Credits",
+       subtitle = "For Students Earned Less Than 12 Credits")+    
+  xlab("Failed Credits")+
+  ylab("Predicted Retention Rate")
+p+geom_abline(intercept = coefsy[1],slope=coefsy[2],color ="blue")+
+  geom_abline(intercept = coefsn[1],slope=coefsn[2],color ="red")+
+  theme_bw()
+
+```
+
+The numbers at the bottom are the total number of students at each categories and the numbers around the bars are the mean predicted retention rate of students at each categories. For students who earned less than 12 credits, there seems to be a negative linear trend between failed credits and retention rate for both single-major and double-major students. The more credits they failed, the less likely the students will return to school. Then we fit regression lines for the mean predicted retention rate in the seven failed credits categories for both signle-major and double major students. The fitted regression lines look parallel to each other, which means the interaction term bewteen `failed credits` and `double major` is not significant. In other words, the mean predicted retention rate decreases as failed credits increases no matter if students have a double major or not. However, we can see that overall, according to their academic performance, double-major students are more resistant to quit, because in all seven categories, double-major students all have shorter and higher bars, and fewer outliers than that of single-major students.
+
+```{r}
+###categorical `failed credits` and `double major` is not significant.
+fit_c<-glm(Retained~(cat_creditfail+DoubleMajor)^2, data= df, family = binomial(link = "logit") )
+summary(fit_c)
+fit_c2<-glm(Retained~cat_creditfail+DoubleMajor, data= df, family = binomial(link = "logit") )
+summary(fit_c2)
+anova(fit_c,fit_c2,test="LR")
+```
+
+
+```{r,echo=FALSE}
+df%>%filter(cat_credit=="greater than or equal to 12 credits")%>%
+  ggplot(aes(x=cat_creditfail, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN_scaled, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  scale_fill_discrete(labels =c("No","Yes"))+
+  labs(title = "Predicted Retention Rate with Double Major and Failed Credits",
+       subtitle = "For Students Earn at Least 12 Credits ")+
+  xlab("Failed Credits")+
+  ylab("Predicted Retention Rate")+
+  # change the scale on y coordinate
+  scale_y_continuous(breaks = seq(.8, 1, by = .05), 
+                       limits = c(.8, 1)) +
+  theme_bw()
+
+```
+
+For students who have earned enough credits this semester, double major is not a very influential factor. Most of them did not fail any credits. Since they can fail at most 6 credits to meet the academic minimum credits requirement, this plot only has three categories on the x axis. We can see that the bars lengthen as the failed credits increase, but we cannot tell a difference between single and double major. This coincides with our findings in the first plot, which is, for students who have earned enough credits, whether they have a second major doesn't affect much on the predicted retention rate.
+
+The main take-away is students with a double major are more likely to return, but the power of the effect depends on students' academic performance. For students who have earned enough credits this semester, the effect of double major on retention probability would be small, whereas the effect would be strong for students who haven't earned enough credits this semester. 

@@ -1,0 +1,107 @@
+---
+title: "02_eda"
+author: "Angel Huang"
+date: "October 13, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load libraries
+```{r}
+# Install EDA related libraries
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(plyr)
+#library(dplyr) # for pipe
+library(tidyr)
+```
+
+# Load data
+```{r}
+#load("INIT_TEST_FILE.Rda")
+df <- read.csv(file = "../../data/TEST_FILE_WEEK2_V2.csv")
+dim(df)
+str(df) # list of each variable
+```
+
+## Check for missing values
+
+```{r}
+df %>%
+  group_by(IS_RETAINED_DESC) %>%
+  summarize(n = n()) %>%
+  select(IS_RETAINED, n) %>%
+  pivot_wider(id_cols = IS_RETAINED, names_from = IS_RETAINED, values_from = n) %>%
+  select(NotRetained = `0`, Retained = `1`) %>%
+  mutate(Pct_Retained = round(100* Retained/(Retained + NotRetained), 1))
+
+# Error: `n()` must only be used inside dplyr verbs. Run `rlang::last_error()` to see where the error occurred.
+```
+```{r}
+rlang::last_error()
+```
+
+
+```{r}
+# Plot response variable
+ggplot(data = df) +
+  geom_bar(mapping = aes(x = IS_RETAINED_DESC))
+
+```
+
+From the bar plot, we see that there are about very few students did not return and majority students returned. Note that there is this imbalance of data that we might need to deal with later.
+
+```{r}
+# Plot continuous variables against response variable IS_RETAINED_DESC
+p1 = ggplot(data = df, mapping = aes(x = IS_RETAINED_DESC, y = CREDIT_HOURS_EARNED)) +
+  geom_boxplot()
+p2 = ggplot(data = df, mapping = aes(x = IS_RETAINED_DESC, y = CREDIT_HOURS_ATT)) +
+  geom_boxplot()
+
+# How different is credit_hours_earned vs. attempted, with regression lines
+p3 = ggplot(df, aes(x=CREDIT_HOURS_ATT, y=CREDIT_HOURS_EARNED)) + 
+  geom_point()+
+  geom_smooth(method=lm,fomular=CREDIT_HOURS_EARNED~CREDIT_HOURS_ATT)
+
+grid.arrange(p1, p2, p3, nrow = 1) # arrange subplots (install gridExtra package)
+```
+It seems like students who returned next term have higher credit_hours_earned this semester. Plot against credit hours attempted has very similar result. After doing correlation, we found the two variables are highly correlated, maybe just 1 is needed in the model?
+
+
+```{r}
+# Plot categorical variables against response variable
+ggplot(data = df) +
+  geom_count(mapping = aes(x = IS_RETAINED_DESC, y = CLASS_LEVEL_STUDENT))
+
+df_SR = df[df$IS_RETAINED == 0 & df$CLASS_LEVEL_STUDENT == 'SR',]
+ggplot(data = df_SR) +
+  geom_count(mapping = aes(x = STRM_DESC, y = FIRST_STRM_DESC))
+
+count(df_SR, 'FIRST_STRM_DESC')
+sum(3219+54+3+1)
+```
+Students who did not return distribute evenly among different grades. 
+
+
+```{r}
+# Subsample dataset to exclude senior data
+df_plot = df %>%
+  group_by(MAJ_1_SCHOOL_NAME) %>%
+  summarise(not_retained = mean(1-IS_RETAINED))
+df_plot
+
+```
+
+
+```{r}
+ggplot(df_plot,aes(x = MAJ_1_SCHOOL_NAME, y = not_retained*100)) +  
+  geom_col() +
+  coord_cartesian(ylim=c(0,10)) + # has to use coord_cartesian, which doesn't filter on data like ylim does
+  theme(axis.text.x = element_text(angle =45))  # tilt x label
+
+```
+So the majors with the highest "drop" rate is medicine with 7% (this makes sense given the difficulty of the major), and then arts and sciences with 5%, and then Dentistry, Nursing, Pharmacy, and business, each around 4%. 

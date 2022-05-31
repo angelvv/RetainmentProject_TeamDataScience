@@ -1,0 +1,223 @@
+---
+title: "week5 teamwork"
+author: "Zhaoqi Liu"
+date: "12/7/2020"
+output: word_document
+---
+```{r}
+load("~/Downloads/STOR 765 consulting/STOR765_FALL2020_TeamDataScience/RData/revised_df.RData")
+```
+
+```{r,message=FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+df<-revised_df
+df$Residency<-as.factor(revised_df$Residency)
+df$DoubleMajor<-as.factor(revised_df$DoubleMajor)
+df$Enrollment<-as.factor(revised_df$Enrollment)
+df$Program<-as.factor(revised_df$Program)
+```
+
+```{r}
+#if include program's interaction, the algorithm did not converge 
+fit_all <- glm(Retained ~ (Class +
+                                Residency +
+                                DoubleMajor + 
+                                Enrollment + 
+                                Credits +
+                                CreditsFailed+
+                                TestCredits)^2+Program, 
+            data = df,
+            family = binomial(link = "logit"))
+
+```
+
+```{r}
+#summary(fit_all)
+```
+
+
+```{r}
+anova(fit_all, test = "LR")
+```
+
+###drop some interaction terms 
+choose interaction term based on the anova test above and test if the reduced model has lack of fit 
+```{r}
+fit_reduced <- glm(Retained ~ Class + Residency + DoubleMajor + Enrollment + 
+                              Credits + CreditsFailed+TestCredits + Program +
+                            DoubleMajor*(Class+CreditsFailed) + 
+                            Credits*(Class+DoubleMajor+Enrollment+
+                                       CreditsFailed+TestCredits) +
+                            Class*Enrollment,
+                            
+            data = df,
+            family = binomial(link = "logit"))
+```
+
+```{r}
+summary(fit_reduced)
+anova(fit_reduced, test="LR")
+```
+
+Compare reduced model and full model: there is no lack of fit. 
+The reduced model contains less interaction terms: doublemajor with class_level, credits and credits_failed. Credits with all the other features, and Class*Enrollment 
+```{r}
+anova(fit_reduced,fit_all,test="LR")
+```
+
+Add prediced retation rate from reduced model to df.  
+```{r}
+pred<-predict(fit_reduced,type="response")
+df$pred<-pred
+```
+
+Create new columns for categorical credits and creditsfailed 
+Since the minimum course load for undergraduates for a single semester is 12 academic credit hours. For students who have less than 12 credits for a semester, they need the permission from their dean. So we classify credits(actual earned) to two categories: below 12 and above 12. We also classify creditsfailed into sequence with  an interval 3 since most classes are 3 credits.
+```{r}
+cat_creditfail<-cut(revised_df$CreditsFailed,breaks = seq(-3,18,3),include.lowest = TRUE)
+table(cat_creditfail)
+
+cat_credits<-ifelse(revised_df$Credits<12,"less than 12 credits","greater than or equal to 12 credits" )
+#levels(cat_credits)
+cat_credits<-factor(cat_credits, levels = c("less than 12 credits","greater than or equal to 12 credits"))
+cat_credit2<-cut(revised_df$Credits,breaks = c(seq(0,18,3),22),include.lowest = TRUE, right=FALSE)
+table(cat_credit2)
+```
+
+```{r}
+df$cat_creditfail<-cat_creditfail
+df$cat_credit<-cat_credits
+df$cat_credit2<-cat_credit2
+```
+
+```{r}
+#return the position and text lable 
+getN <- function(x){
+  return(c(y = 0, label = length(x)))
+}
+getMean <- function(x){
+  return(c(y = mean(x), label = round(mean(x),digit=2)))
+}
+```
+
+###Double Major with Credit Fails 
+add the total number of each category to the plot 
+```{r}
+df%>%ggplot(aes(x=cat_creditfail, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "Predicted Retation Rate with Double Major and Failed Credits")+
+  xlab("Credits Failed")+
+  ylab("Predicted Retation Rate")
+```
+
+For students who did't fail any credits, whether they have a second major doesn't affect the predicted rate much, but students with one major have more outliers. 
+
+```{r}
+#don't know how to change it 
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+df1<-df
+df1%>%
+  group_by(CreditsFailed,DoubleMajor) %>%
+  mutate(outlier = ifelse(is_outlier(pred), pred, as.numeric(NA)))
+df1%>%ggplot(aes(x = cat_creditfail, y = pred, fill=DoubleMajor)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_point(aes(x = cat_creditfail,y = pred, fill=DoubleMajor, color = factor(Retained),shape ="."), na.rm = TRUE)
+```
+
+plot the retation rate with double major, credit fails and the true retation result 
+```{r}
+p<-df%>%ggplot(aes(x=cat_creditfail, y=pred))+
+  geom_point(aes(color=factor(Retained))) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "True Retation with Double Major and Failed Credits")+
+  scale_color_discrete(name = "Retained", labels =c("No","Yes"))+
+  xlab("Credits Failed")+
+  ylab("Predicted Retation Rate")
+p+facet_grid(col = vars(DoubleMajor), labeller = as_labeller(c(`0`="Single Major",`1`="Double Major")))
+```
+
+
+plot the predicted retation rate with double major and credits earned
+```{r}
+df%>%ggplot(aes(x=cat_credit2, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "Predicted Retation Rate with Double Major and Earned Credits")+
+  xlab("Credits ")+
+  ylab("Predicted Retation Rate")
+```
+
+
+plot the predicted retation rate with double major, credits earned and the true retation result 
+```{r}
+p<-df%>%ggplot(aes(x=cat_credit2, y=pred))+
+  geom_point(aes(color=factor(Retained))) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "True Retation with Double Major and Earned Credits")+
+  scale_color_discrete(name = "Retained", labels =c("No","Yes"))+
+  xlab("Credits Earned")+
+  ylab("Predicted Retation Rate")
+p+facet_grid(col = vars(DoubleMajor), labeller = as_labeller(c(`0`="Single Major",`1`="Double Major")))
+```
+
+
+If treat credits earned as a two-category variable: <12 and >=12
+```{r}
+df%>%ggplot(aes(x=cat_credit, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "Double Major with two-category Earned Credits")+
+  xlab("Credits ")+
+  ylab("Predicted Retation Rate")
+```
+
+For students whose Credits <12, whether they have a second major plays an important role in determining whether they will come back. 
+
+```{r}
+p2<-df%>%ggplot(aes(x=cat_creditfail, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "Predicted Retation Rate with Double Major, Failed Credits and two-category Credits")+
+  xlab("Credits Failed")+
+  ylab("Predicted Retation Rate")
+p2+facet_grid(~cat_credit)
+```
+
+For students who have earned less than 12 credits in this semester, which means undergraduate students cannot be regard as a full-time students at UNC, double major affects the retation. Those students who has a second major are more likely to return. For students who have earned more than 12 credits, double major doesn't affect much on the retation rate prediction. 
+
+
+```{r}
+p3<-df%>%ggplot(aes(x=Program, y=pred,fill=DoubleMajor))+
+  geom_boxplot(outlier.size = 0.1) + 
+  stat_summary(fun.data = getN, geom = "text",position = position_dodge(width = 0.75), size=2.5)+
+  stat_summary(fun.data = getMean, geom="text",position = position_dodge(width = 0.75),size = 2.5)+
+  labs(title = "Predicted Retation Rate with Double Major, Program and Earned Credits")+
+  xlab("Program")+
+  ylab("Predicted Retation Rate")
+p3+facet_grid(row=vars(cat_credit))
+```
+
+ASBCH seems to be program related with natural science and mathematics. 
+Considering the Programs, we see that students in some programs do not have a second major. The number of students in BA programs who obtain less than 12 credits in this semester, is larger than that of BS program. 
+For students who obtain less than 12 credits this semester, students with a second major are more likely to return. 
+
+```{r}
+df%>%filter(cat_credit=="less than 12 credits" )%>%
+  group_by(Retained,Class,DoubleMajor)%>%
+  summarise(n = n())
+```
+
+We can see that for students has less than 12 credits, the number of students with a second major is less than the number of students with single major for all class level. 
